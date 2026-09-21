@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: nexs
+      POSTGRES_PASSWORD: nexs
+      POSTGRES_DB: nexs
+    volumes: [nexs_pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexs"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  nexs_pg: {}

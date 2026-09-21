@@ -1,0 +1,158 @@
+# NEXS — documentation set (authoritative for the code in this repo)
+
+This folder documents the **code in `agents/nexs/`** — what exists, what does not, and why.
+The documents at the workspace root (`nexs-build-spec.md`, `PRD.md`, `docs/*.md`, `v2.md`,
+`gaps.md`) are **inputs** and are deliberately left unmodified; where they disagree with each
+other, this folder is the tie-breaker.
+
+## 0. The two conflicts that actually cost time (both resolved here)
+
+**Two different 14-phase lists.** They are not the same list and the numbers are not
+interchangeable:
+
+| Source | Phase numbering |
+|---|---|
+| `nexs-build-spec.md` (root) | `PHASE 0 … PHASE 14`. **Phase 7 = Approvals & Notifications, Phase 8 = Chat** |
+| `docs/03-BUILD-PLAN.md` (root) | a *different* 14-way split. **#7 = Chat** |
+
+Consequence: "phase 7" is meaningless without the subject. **Always name a phase by subject.**
+The table in §1 uses the `nexs-build-spec.md` numbering, because that is the list the code was
+built against.
+
+**Two contradictory colour-token drafts.** `docs/UI-UX-DESIGN.md` contains the Experience Guide
+(§0–§14) and then a second, conflicting specification (§1–§10 with `#8B5CF6` / `#0B0B10`).
+`UI-UX-DESIGN-v2.md` in this folder fixes this by declaring the Experience-Guide token set
+canonical and retiring the second draft explicitly.
+
+## 1. Where the project actually is
+
+Spec numbering. "Done" means that phase's acceptance test passed against real code.
+
+| Phase | Subject | Status | Evidence / caveat |
+|---|---|---|---|
+| 0 | Scaffolding & foundations | ✅ done | pnpm + turbo monorepo, Express 5, pino correlation ids, CI workflow |
+| 1 | Database layer | ✅ done | `prisma/migrations/20260918000000_init` + pgvector |
+| 2 | Auth & tenancy | ✅ done | token families, refresh rotation, password reset; tenant isolation is structural |
+| 3 | Vault, providers, models, gateway | ✅ done | `ModelGateway` is the only importer of provider SDKs; fallback, retry, circuit breaker, usage rows |
+| 4 | Tool registry, MCP, connectors | ✅ done | MCP lifecycle + orphan reaping, native tools, `worker_threads` sandbox, Playwright manager |
+| 5 | Execution engine | ✅ done | plan / act / observe / verify, approval gate, execution receipts |
+| 6 | Agents, goals, tasks, workflows | ✅ done | agent version pinning via a real FK; 756 tests at the time |
+| 7 | Approvals & notifications | ✅ done | CAS decide/expire, pg-boss (`approval.expire`), deep-linked notifications; 872 tests |
+| 8 | Chat | ✅ done | SSE turn runner, slash commands (21), mentions, one shared `resolveRunContext`; **921 tests / 43 files** |
+| 9 | Browser & sandbox | ◑ folded into Phase 4 | This phase's genuinely new work was already built under Phase 4's scope. Nothing is pending, but no separate phase-9 artifacts exist. |
+| 10 | Memory & research |  not started | `Memory`, `ResearchProject/Run/Source/Finding` models exist; no repositories, services or routes |
+| 11 | Events & scheduling | ⛔ partial | `Event`, `EventSubscription`, `Schedule` models and the pg-boss registry exist. `TaskService` explicitly refuses `recurring`/`event` triggers with `FEATURE_DISABLED`; there is no scheduler loop and no delivery-target execution |
+| 12 | Real-time (SSE) & dashboard | ◑ partial | SSE hub, `EventBus`, `/api/stream` and the full event catalog are **done** (chat required them). The **dashboard does not exist** |
+| 13 | Frontend |  **not started** | **`apps/web` does not exist** — no Vite app, no React, no routes, no pages |
+| 14 | Seed, tests, hardening |  partial | Per-phase tests are real and extensive (921). `src/seed/seed.ts` does not exist; ops hardening (shutdown drain, workdir TTL purge, provider-health cron) is not done |
+| **v2** | **Surfaces** (channels, DM pairing, devices, bindings, plugins) |  in progress | See `SURFACES-BUILD-PLAN.md`. Data model, migration and shared contracts are **done and verified**; repositories/services/routes/UI are not |
+
+**In one line:** 8 of 14 phases are complete and verified; the frontend has not begun; `v2.md`
+adds a ninth subject (Surfaces), which is currently at its data-model layer.
+
+## 2. What `v2.md` changes (the delta this repo must absorb)
+
+`v2.md` is a UI/UX revision, but four of its items are **backend** changes, not presentation:
+
+1. **New domain (§20)** — `Channel`, `ChannelAccount`, `AccessGroup`, `PairingRequest`,
+   `Device`, `DeviceToken`, `Binding`, `Plugin`, `SkillHubEntry`.
+2. **`Schedule.deliveryTarget`** — a fired schedule's output is posted to a channel (§10).
+3. **`Approval.kind`** — `tool` vs **`exec`**: the owner-only command approval whose outcomes
+   are allow-once / allow-always / deny (§4.4, §11).
+4. **`ChatSession.surface` / `channelType` / `peerRef`** — a conversation knows where it
+   started, which is what `/handoff` rebinds and what "Started on Telegram · DM you" reads
+   (§4.1/§4.5).
+
+Items 1–4 are **already applied** to `prisma/schema.prisma`, with a migration generated by
+`prisma migrate diff` (never hand-written). Everything else in `v2.md` is presentation and
+belongs to Phase 13 (Frontend).
+
+## 3. Documents in this folder
+
+| File | What it is |
+|---|---|
+| `README.md` | this file — phase truth, conflicts resolved, the verification gate |
+| `PHASES.md` | **the verification**: every phase, its status, and what `v2.md` changes about it |
+| `UI-UX-DESIGN-v2.md` | the canonical UI/UX specification: chat-first & multi-surface |
+| `SURFACES-BUILD-PLAN.md` | build order for the Surfaces domain, with per-step acceptance tests |
+
+### Per-phase documents
+
+One file per phase, each recording what is built, what `v2.md` changes about it, the acceptance
+test, and any unresolved decision. They are named by **subject**, never by number alone — see §0.
+
+| Phase | Document | Status |
+|---|---|---|
+| 0 | [Foundation](phases/00-FOUNDATION.md) | ✅ done — v2 needs `apps/web` |
+| 1 | [Database](phases/01-DATABASE.md) | ✅ done — **changed: +9 models, +3 field sets** |
+| 2 | [Auth & tenancy](phases/02-AUTH-AND-TENANCY.md) | ✅ done — v2 adds device tokens + owner |
+| 3 | [Gateway](phases/03-GATEWAY.md) | ✅ done — v2 adds `/moa`, `/compress` |
+| 4 | [Tools, MCP, browser, sandbox](phases/04-TOOLS-MCP-BROWSER-SANDBOX.md) | ✅ done — v2 adds exec approval |
+| 5 | [Execution engine](phases/05-EXECUTION-ENGINE.md) | ✅ done — v2 adds mid-run controls |
+| 6 | [Agents, goals, tasks, workflows](phases/06-AGENTS-GOALS-TASKS-WORKFLOWS.md) | ✅ done — v2 adds `soul.md` |
+| 7 | [Approvals & notifications](phases/07-APPROVALS-AND-NOTIFICATIONS.md) | ✅ done — v2 makes it cross-surface |
+| 8 | [Chat](phases/08-CHAT.md) | ✅ done — **changed: the unified registry (§9)** |
+| 9 | [Browser & sandbox](phases/09-BROWSER-AND-SANDBOX.md) | ◑ folded into 4 |
+| 10 | [Memory & research](phases/10-MEMORY-AND-RESEARCH.md) |  not started |
+| 11 | [Events & scheduling](phases/11-EVENTS-AND-SCHEDULING.md) | ⛔ partial |
+| 12 | [Real-time & Pulse](phases/12-REALTIME-AND-PULSE.md) |  partial |
+| 13 | [Frontend](phases/13-FRONTEND.md) | ⛔ not started |
+| 14 | [Seed, tests, hardening](phases/14-SEED-TESTS-HARDENING.md) |  partial |
+
+## 3a. The two open decisions that block real work
+
+Both are recorded in the phase documents, and both are **spec gaps rather than implementation
+details** — building either one without deciding produces a schema or a protocol that has to be
+undone:
+
+1. **Memory scoping** (`phases/10-MEMORY-AND-RESEARCH.md`). `Memory` carries both `tenantId` and a
+   nullable `agentId`, which admits three different products: workspace-wide, per-agent, or both
+   ranked. It determines whether `agentId` is nullable, what the retrieval query is, and what the
+   page's scope column means. Decide it before writing any memory code.
+2. **One active run per agent, or per tenant?** (`phases/05-EXECUTION-ENGINE.md`).
+   `docs/01-ARCHITECTURE.md` says per **agent**; the spec's `TENANT_CONCURRENCY=5` is per
+   **tenant**. The contradiction is deliberately not baked into the migration. `/queue` is a
+   backlog and therefore depends on the answer.
+
+## 4. Rules that hold everywhere in the code
+
+- **`config.ts` is the only module that reads `process.env`.** Everything else takes `Config`
+  by injection from `container.ts` / `runtime.ts`.
+- **Tenant isolation is structural.** `tenantId` is the first argument of every tenant-owned
+  repository method and appears in every `where`. It is a plain indexed scalar, deliberately
+  **not** a Prisma relation. Updates use `updateMany({ where: { id, tenantId } })`, never
+  `update({ where: { id } })`.
+- **Two honesty rules.** Every number on screen traces to a DB row. Only `ModelGateway`,
+  `MCPManager` and `FileService` may touch providers, MCP, or the filesystem.
+- **`@nexs/shared` resolves from `dist/`, not `src/`.** Editing shared code is invisible to the
+  server until `tsc -p tsconfig.json` is re-run in `packages/shared`. This is a recurring trap:
+  the symptom is "has no exported member" for something plainly visible in `src`.
+- **Prisma schema comments are `//` only.** A `/** … */` block comment is a validation error
+  (`P1012`), not a style preference.
+
+## 5. The verification gate
+
+Run in this order. `vitest` does **not** typecheck, so a green suite is not evidence the build
+works — `typecheck` covers `tsconfig.json` **and** `tsconfig.test.json`, and `build` catches
+narrowing errors vitest can never see.
+
+```bash
+pnpm lint        # eslint
+pnpm typecheck   # tsc --noEmit, src AND test
+pnpm test        # vitest
+pnpm build       # tsc emit
+```
+
+Offline variants that work without any database:
+
+```bash
+prisma validate                                                        # schema is valid
+prisma migrate diff --from-schema-datamodel <before>.prisma \
+                    --to-schema-datamodel prisma/schema.prisma --script   # the exact DDL delta
+prisma generate                                                        # client for the new models
+```
+
+With no database, a booted server still proves routing, validation order and auth ordering:
+`/api/health` correctly reports `503 {"status":"degraded","db":"down","queue":"down"}`, and
+every `/api/chat*` route returns `401` — including a wrong method, so there is no 404-vs-401
+oracle.

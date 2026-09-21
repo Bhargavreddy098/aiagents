@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>NEXS — Agent Control Plane</title>
+    <!--
+      The brand mark, as a data URI.
+
+      Without this the browser asks for `/favicon.ico` on every load and the dev server answers
+      404, which puts a red line in the console on a page that is working perfectly. An error that
+      is always there is an error nobody reads.
+
+      Inline rather than a file in `public/`: there is no `public/` directory, and the whole asset
+      is one gradient square. The `N` is a path rather than `<text>` because a favicon renders
+      before any font is guaranteed to be loaded, and a missing glyph would leave a blank tile.
+      Colours are the `.sidebar-mark` gradient from `styles/base.css`; it is a fixed brand colour,
+      so it deliberately does not follow `data-theme`.
+    -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23629bff'/%3E%3Cstop offset='1' stop-color='%233d78e6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M9 8h3.5l7 10.2V8h3.5v16h-3.5l-7-10.2V24H9z' fill='%23fff'/%3E%3C/svg%3E"
+    />
+    <script>
+      /*
+       * Apply the stored theme before the first paint.
+       *
+       * This cannot import `src/lib/theme.ts` — it runs before any module does — so the storage
+       * key below is a second copy of `THEME_STORAGE_KEY`. `theme.test.ts` reads this file and
+       * fails if the two drift, because the failure is invisible: a preference that silently
+       * stops being honoured on a cold load, which shows up as a white flash for anyone who
+       * chose dark and nowhere else.
+       *
+       * It is inline and synchronous on purpose. Deferring it, or moving it into the bundle,
+       * reintroduces exactly the flash it exists to prevent.
+       *
+       * The `try` is not defensive padding: `localStorage` throws outright in some privacy
+       * modes, and an exception thrown in `<head>` would stop the page from rendering at all.
+       * Failing to read a preference must never be worse than not having one.
+       */
+      try {
+        var stored = window.localStorage.getItem('nexs.theme');
+        document.documentElement.dataset.theme = stored === 'dark' ? 'dark' : 'light';
+      } catch (error) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

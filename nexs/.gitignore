@@ -1,0 +1,39 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build
+dist/
+*.tsbuildinfo
+
+# env — never commit real keys
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# storage root (uploads, screenshots, sandbox workdirs, research artifacts)
+data/
+
+# prisma
+apps/server/prisma/migrations/dev.db*
+
+# logs & coverage
+*.log
+coverage/
+.nyc_output/
+
+# playwright
+test-results/
+playwright-report/
+blob-report/
+
+# editors / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# stray staging files (sandboxed installs stage deletes as _tmp_<pid>_<hash>)
+_tmp_*

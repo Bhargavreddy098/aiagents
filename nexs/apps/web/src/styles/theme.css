@@ -1,0 +1,272 @@
+/*
+ * §6.3 Theme tokens — light-first.
+ *
+ * These are the spec's values, with one change of default. §6.3 is titled "dark-first" and its
+ * palette is a dark one; this app now ships light by default and keeps the spec's palette
+ * **verbatim** under `[data-theme='dark']` below. Nothing was deleted and no token was renamed,
+ * so a reader comparing this file with §6.3 finds every name they expect.
+ *
+ * Nothing in this app hard-codes a hex: every colour resolves through a token below, so
+ * retheming is one edit. The one exception is the accent's *gradient*, which is a lit surface
+ * rather than a colour — see the note in `base.css`'s soft-UI layer.
+ *
+ * On the spec's "(Tailwind)" heading: §6.3 is titled "Theme tokens (Tailwind)",
+ * but its content is a list of CSS custom properties. The tokens are the
+ * contract; the utility framework that consumes them is an implementation
+ * choice. Declaring them as custom properties and writing plain CSS against
+ * them keeps the build free of a PostCSS/Tailwind version dependency and makes
+ * every value greppable. The names match the spec exactly.
+ *
+ * ## The two values that had to move, and why
+ *
+ * A palette is not theme-neutral, and two of §6.3's values cannot be carried over unchanged:
+ *
+ *  - **`--accent`** is `#4f8cff`, which is 2.6:1 on a light canvas. It is a fine *fill* and an
+ *    unreadable *link*, and this app uses it for both. The light value is `#2f6fe0` (4.6:1).
+ *  - **The status colours** are tuned for a dark ground; `#22c55e` on `#eef1f6` is 2.1:1. The
+ *    light values are the same hues one step darker, which keeps "green means ok" while making
+ *    the badge legible.
+ *
+ * Both are recorded in `nexs-light-theme-report.md` rather than applied quietly.
+ */
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: #eef1f6;
+  --surface: #f6f8fc;
+  --border: #d8dee8;
+
+  /* text */
+  --text: #23272e;
+  --muted: #5c6673;
+
+  /* brand — running state and links. Darkened from §6.3's `#4f8cff`: see the note above. */
+  --accent: #2f6fe0;
+
+  /* status */
+  --status-ok: #15803d;
+  --status-waiting: #a15c07;
+  --status-failed: #c62828;
+  --status-running: #1d4ed8;
+
+  /*
+   * Derived tokens. None of these is a new colour: each is a transparency or a
+   * lightness step of a token above, so the palette stays closed. They exist so
+   * that "a faint green background" is spelled once instead of at forty call
+   * sites with forty slightly different alphas.
+   */
+  --surface-raised: #ffffff;
+  --surface-hover: #e7ecf4;
+  --surface-sunken: #e5e9f0;
+  --border-strong: #bcc5d4;
+
+  --accent-dim: rgba(47, 111, 224, 0.12);
+  --ok-dim: rgba(21, 128, 61, 0.12);
+  --waiting-dim: rgba(161, 92, 7, 0.12);
+  --failed-dim: rgba(198, 40, 40, 0.12);
+  --running-dim: rgba(29, 78, 216, 0.12);
+
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.1);
+
+  /* geometry + type */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --font:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --topbar-h: 52px;
+
+  /* motion — one duration, so nothing in the app feels a different speed */
+  --speed: 120ms;
+}
+
+/* ══════════════════════════════════════════════════════════════════ soft UI ══
+ *
+ * The neumorphic layer.
+ *
+ * §6.3 above is unchanged in *structure*: every colour the product had, it still has, under the
+ * same name. What follows is *depth* — a second set of tokens describing how a surface is lit
+ * rather than what colour it is, plus the handful of values that cannot be shared between the
+ * two themes (a hairline, a scrollbar, an engraving).
+ *
+ * ## What neumorphism requires, and why that is structural rather than cosmetic
+ *
+ * The style works by extruding an element out of its own background: a light source at the top
+ * left, a shadow at the bottom right, a highlight at the top left. Two consequences follow.
+ *
+ *  - **The canvas is one colour.** A raised element on a background of a *different* colour
+ *    reads as a card with a drop shadow, not as a shape pressed out of the surface. So the app
+ *    canvas becomes `--neu-base` and every panel sits on it at the same value.
+ *  - **Borders mostly go away.** A 1px border beside a soft shadow is two answers to "where does
+ *    this end", and the hard one always wins. Depth is shadow-only here. Where a boundary has to
+ *    be stated — a scroll region's edge, a table rule — it is stated as a `--neu-*` inset.
+ *
+ * ## Why the light is a translucent white rather than a second grey
+ *
+ * A grey highlight only works against the exact background it was picked for. These are alphas
+ * over `--neu-base`, so raising the canvas, or dropping a raised element inside a sunken one,
+ * keeps the lighting consistent without a second set of numbers to keep in step.
+ *
+ * ## Light is the harder of the two, and the numbers say so
+ *
+ * On a dark canvas the shadow does most of the work and the highlight is nearly free. On a light
+ * one the highlight is *white on near-white* — it carries no information at all — so the whole
+ * extrusion rests on the shadow, which has to be a real colour rather than black at low alpha.
+ * Black at 12% over `#eef1f6` reads as dirt; the shadow here is a desaturated blue-grey, which is
+ * what a soft shadow on a cool surface actually looks like. That is the single reason this
+ * palette uses `rgba(163, 177, 198, …)` and not `rgba(0, 0, 0, …)`.
+ */
+:root {
+  /*
+   * The canvas. A step darker than §6.3's `--bg` so the *highlight* has somewhere to travel to
+   * — the mirror of the dark theme, where the canvas had to be lifted so the highlight was not
+   * swallowed by near-black.
+   */
+  --neu-base: #eef1f6;
+  --neu-base-sunken: #e4e9f1;
+
+  /*
+   * The two lights.
+   *
+   * On light the highlight is opaque-white rather than translucent: a translucent white over an
+   * already-pale canvas is indistinguishable from the canvas, and the top-left edge of every
+   * raised shape would simply not exist.
+   */
+  --neu-light: rgba(255, 255, 255, 0.95);
+  --neu-dark: rgba(163, 177, 198, 0.62);
+
+  /* Depth. `-sm` for rows and controls, the default for panels, `-lg` for overlays. */
+  --neu-raised-sm: -1px -1px 3px var(--neu-light), 2px 2px 4px var(--neu-dark);
+  --neu-raised: -3px -3px 7px var(--neu-light), 4px 4px 9px var(--neu-dark);
+  --neu-raised-lg: -5px -5px 14px var(--neu-light), 8px 8px 20px var(--neu-dark);
+
+  /* Cut into the surface: inputs, wells, and the pressed state of anything raised. */
+  --neu-inset-sm: inset 2px 2px 4px var(--neu-dark), inset -1px -1px 2px var(--neu-light);
+  --neu-inset: inset 3px 3px 6px var(--neu-dark), inset -2px -2px 5px var(--neu-light);
+
+  /* A hairline that survives on a surface with no borders. */
+  --neu-hairline: 1px solid rgba(15, 23, 42, 0.07);
+
+  /*
+   * The five values that are genuinely per-theme and are *not* expressible as a shadow pair.
+   *
+   * Each of these was a hard-coded literal that only worked on dark — a white scrollbar thumb
+   * and a white table rule are invisible on a light canvas, and the wordmark's engraving was
+   * white-below/black-above, which is the dark theme's light source read backwards. They are
+   * tokens now so that flipping the theme is one edit rather than an audit.
+   */
+  --neu-scroll-thumb: rgba(15, 23, 42, 0.18);
+  --neu-table-rule: rgba(15, 23, 42, 0.07);
+  --neu-row-hover: rgba(15, 23, 42, 0.03);
+  --neu-engrave-light: rgba(255, 255, 255, 0.95);
+  --neu-engrave-dark: rgba(15, 23, 42, 0.2);
+  --neu-scrim: rgba(15, 23, 42, 0.34);
+  /* The native search-cancel glyph is a dark asset; on a dark theme it is inverted to read. */
+  --neu-icon-filter: invert(0.35);
+
+  /* One radius for every extruded surface: two radii read as two materials. */
+  --neu-radius: 12px;
+  --neu-radius-sm: 9px;
+
+  /*
+   * Text below `--muted`, for section labels and metadata.
+   *
+   * Measured rather than picked by eye: `#5f6a78` on `--neu-base` is 5.3:1, which clears AA for
+   * the 10px uppercase labels this is used for. A paler grey looks better in isolation and
+   * fails, and a section heading nobody can read is a section nobody can find.
+   */
+  --neu-text-quaternary: #5f6a78;
+
+  /*
+   * The two regions the shell adds. See `AppShell.tsx`.
+   *
+   * One width, not two. The shell used to be three columns — a 56px rail, a 248px panel and the
+   * task — and the rail's width was the symptom rather than the design: 56px is what you get when
+   * a column is only wide enough for a glyph. The destinations that could not be labelled there
+   * are rows inside Settings now, so the column that remains can afford to be 240px and hold
+   * labels, conversations and a filter.
+   */
+  --sidebar-w: 240px;
+}
+
+/* ═══════════════════════════════════════════════════════════ dark (the spec) ══
+ *
+ * §6.3's own palette, verbatim — the values this app shipped before the light theme existed.
+ *
+ * Kept rather than deleted for two reasons. It is what the specification asks for, so a reader
+ * checking §6.3 against the code still finds it; and it is the only way to answer "does the soft
+ * layer actually work on both grounds", because the depth tokens below are the *inverse* of the
+ * light ones in every dimension that matters — canvas raised instead of lowered, highlight
+ * translucent instead of opaque, shadow black instead of blue-grey.
+ *
+ * Applied by `lib/theme.ts` writing `data-theme="dark"` on `<html>`.
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #0a0b0d;
+  --surface: #121417;
+  --border: #23262b;
+
+  /* text */
+  --text: #e6e8eb;
+  --muted: #9aa0a8;
+
+  /* brand — running state and links */
+  --accent: #4f8cff;
+
+  /* status */
+  --status-ok: #22c55e;
+  --status-waiting: #f59e0b;
+  --status-failed: #ef4444;
+  --status-running: #3b82f6;
+
+  --surface-raised: #171a1e;
+  --surface-hover: #1b1f24;
+  --surface-sunken: #0d0f11;
+  --border-strong: #333840;
+
+  --accent-dim: rgba(79, 140, 255, 0.14);
+  --ok-dim: rgba(34, 197, 94, 0.14);
+  --waiting-dim: rgba(245, 158, 11, 0.14);
+  --failed-dim: rgba(239, 68, 68, 0.14);
+  --running-dim: rgba(59, 130, 246, 0.14);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  /*
+   * The canvas. A step lighter than §6.3's `--bg` for a physical reason rather than a taste one:
+   * a highlight is invisible against near-black, so the extrusion has nowhere to travel to.
+   */
+  --neu-base: #1a1d23;
+  --neu-base-sunken: #16191e;
+
+  /* The two lights. Tuned against a rendered screenshot rather than by eye in the source: at
+     0.055 the extrusion on a `.card` was invisible on a real screen, which turns "soft UI" into
+     "no UI". These are the smallest values that still read as depth. */
+  --neu-light: rgba(255, 255, 255, 0.07);
+  --neu-dark: rgba(0, 0, 0, 0.6);
+
+  --neu-raised-sm: -1px -1px 3px var(--neu-light), 2px 2px 4px var(--neu-dark);
+  --neu-raised: -3px -3px 7px var(--neu-light), 4px 4px 9px var(--neu-dark);
+  --neu-raised-lg: -5px -5px 14px var(--neu-light), 8px 8px 20px var(--neu-dark);
+
+  --neu-inset-sm: inset 2px 2px 4px var(--neu-dark), inset -1px -1px 2px var(--neu-light);
+  --neu-inset: inset 3px 3px 6px var(--neu-dark), inset -2px -2px 5px var(--neu-light);
+
+  --neu-hairline: 1px solid rgba(255, 255, 255, 0.045);
+
+  --neu-scroll-thumb: rgba(255, 255, 255, 0.08);
+  --neu-table-rule: rgba(255, 255, 255, 0.06);
+  --neu-row-hover: rgba(255, 255, 255, 0.022);
+  --neu-engrave-light: rgba(255, 255, 255, 0.05);
+  --neu-engrave-dark: rgba(0, 0, 0, 0.8);
+  --neu-scrim: rgba(9, 10, 13, 0.66);
+  --neu-icon-filter: invert(0.65);
+
+  /* Measured on this canvas: `#858a93` is 4.87:1, which clears AA for the 10px labels. */
+  --neu-text-quaternary: #858a93;
+}

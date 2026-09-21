@@ -1,0 +1,3231 @@
+/*
+ * Base layer: reset + the primitives every page composes from.
+ *
+ * Kept deliberately small. The rule is that a page describes its structure and
+ * its data; it should not be inventing colours, spacing scales or control
+ * chrome. If a page needs a look that is not here, the look belongs here.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.25;
+}
+h1 {
+  font-size: 20px;
+}
+h2 {
+  font-size: 16px;
+}
+h3 {
+  font-size: 14px;
+}
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--accent-dim);
+}
+
+/* ---------------------------------------------------------------- utilities */
+
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 12px;
+}
+.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.right {
+  text-align: right;
+}
+.center {
+  text-align: center;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------- shell */
+
+.app {
+  display: grid;
+  /* sidebar · the task.
+     Two regions, not three. The navigation column was split in two when the destination list
+     outgrew it; the split was the wrong answer to a real problem, and the destinations that do
+     not belong beside the conversation list are rows inside Settings instead. See the header of
+     `AppShell.tsx`. */
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100%;
+}
+
+.brand-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--topbar-h);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex: 0 0 auto;
+}
+
+.content {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* -------------------------------------------------------------------- card */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.card-body {
+  padding: 12px;
+}
+.card-body-flush {
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------- stats */
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  min-width: 0;
+}
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 4px;
+}
+.stat-value.is-zero {
+  color: var(--muted);
+}
+.stat-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------ button */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--speed);
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #3f7ce8;
+}
+.btn-danger {
+  /* `--failed` is not a token. §6.3 names it `--status-failed`, so both of these declarations
+     were invalid and silently dropped — the danger button had no background of its own. */
+  background: var(--status-failed);
+  border-color: var(--status-failed);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #d93a3a;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.btn-sm {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.btn-block {
+  width: 100%;
+}
+
+/* ------------------------------------------------------------------- badge */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.badge-ok {
+  background: var(--ok-dim);
+  border-color: transparent;
+  color: var(--status-ok);
+}
+.badge-waiting {
+  background: var(--waiting-dim);
+  border-color: transparent;
+  color: var(--status-waiting);
+}
+.badge-failed {
+  background: var(--failed-dim);
+  border-color: transparent;
+  color: var(--status-failed);
+}
+.badge-running {
+  background: var(--running-dim);
+  border-color: transparent;
+  color: var(--status-running);
+}
+.badge-accent {
+  background: var(--accent-dim);
+  border-color: transparent;
+  color: var(--accent);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: 0 0 auto;
+}
+.dot-ok {
+  background: var(--status-ok);
+}
+.dot-waiting {
+  background: var(--status-waiting);
+}
+.dot-failed {
+  background: var(--status-failed);
+}
+.dot-running {
+  background: var(--status-running);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ------------------------------------------------------------------- table */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table tbody tr:hover {
+  background: var(--surface-hover);
+}
+.table-clickable tbody tr {
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ inputs */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.textarea {
+  font-family: var(--mono);
+  min-height: 96px;
+  resize: vertical;
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--muted);
+}
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  opacity: 0.55;
+}
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.field-error {
+  font-size: 11px;
+  color: var(--status-failed);
+}
+
+/* -------------------------------------------------------------------- tabs */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tab {
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+/* ------------------------------------------------------------ drawer/modal */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 40;
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(560px, 100vw);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.drawer-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.drawer-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+
+/* ------------------------------------------------------------------- misc */
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--muted);
+  justify-content: center;
+}
+
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+.empty-title {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.error-box {
+  padding: 12px;
+  border-radius: var(--radius);
+  /* Was `--failed`, which is not a token — so the whole `border` shorthand was dropped and
+     every error box in the app has been rendering with no outline at all. */
+  border: 1px solid var(--status-failed);
+  background: var(--failed-dim);
+  color: var(--text);
+  font-size: 13px;
+}
+.error-code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--status-failed);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-raised), var(--surface-hover), var(--surface-raised));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s linear infinite;
+  border-radius: var(--radius-sm);
+  height: 12px;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+pre.code {
+  margin: 0;
+  padding: 10px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: 13px;
+}
+.kv dt {
+  color: var(--muted);
+}
+.kv dd {
+  margin: 0;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.timeline-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+}
+.timeline-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.timeline-line {
+  flex: 1;
+  width: 1px;
+  background: var(--border);
+  min-height: 8px;
+}
+
+.progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--speed);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.toolbar .input,
+.toolbar .select {
+  width: auto;
+  min-width: 160px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--surface);
+  padding: 8px 12px;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
+/* ── chat ─────────────────────────────────────────────────────────────────────
+   The one page with a fixed-height, internally-scrolling region. Every other page
+   scrolls as a document; chat cannot, because the composer has to stay reachable
+   while a long transcript scrolls behind it. The min-height:0 chain below is what
+   makes that work — without it a flex child refuses to shrink and the transcript
+   pushes the composer off the bottom of the window.
+   -------------------------------------------------------------------------- */
+
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.chat-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--failed-dim);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* ── transcript ───────────────────────────────────────────────────────────── */
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.transcript-older {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 4px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  max-width: 88%;
+}
+.message-user {
+  align-self: flex-end;
+  background: var(--accent-dim);
+  border-color: transparent;
+}
+.message-assistant {
+  align-self: flex-start;
+}
+.message-tool {
+  align-self: flex-start;
+  background: var(--surface-sunken);
+}
+/* A streaming bubble is visually provisional: dashed edge, so it never reads as a saved row. */
+.message-live {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+.message-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.message-role {
+  font-size: 12px;
+  font-weight: 600;
+}
+.message-body {
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* The streaming caret. A block that blinks, so the text reads as still arriving. */
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: caret-blink 1s steps(2, start) infinite;
+}
+@keyframes caret-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ── tool calls ───────────────────────────────────────────────────────────── */
+
+.tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tool-call {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-size: 12px;
+}
+.tool-call-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.tool-call-summary::-webkit-details-marker {
+  display: none;
+}
+.tool-call-summary::before {
+  content: '▸';
+  color: var(--muted);
+  font-size: 10px;
+}
+.tool-call[open] > .tool-call-summary::before {
+  content: '▾';
+}
+.tool-call-name {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.tool-call-args {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-call-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border);
+}
+
+pre.code-sm {
+  font-size: 11px;
+  max-height: 240px;
+}
+
+/* ── composer ─────────────────────────────────────────────────────────────── */
+
+.composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.composer-input {
+  min-height: 64px;
+  resize: vertical;
+}
+.composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+/* The textarea plus the paste-pill backdrop that sits over it. `position: relative` here is what
+   lets the pill strip be placed without the completion menu (which is absolute against
+   `.composer`) moving with it. */
+.composer-input-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.select-sm {
+  width: auto;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+/* ── completions ──────────────────────────────────────────────────────────── */
+
+.completion {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  /* Anchored above the textarea: the menu opens where the user is looking, and a menu that
+     covers the composer hides the text being completed. */
+  bottom: calc(100% - 4px);
+  z-index: 20;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.completion-filter {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.completion-list {
+  overflow-y: auto;
+  padding: 4px;
+}
+.completion-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.completion-row.is-active {
+  background: var(--surface-hover);
+}
+.completion-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.completion-desc {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.completion-group-head {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.completion-note {
+  margin: 0;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── chips ────────────────────────────────────────────────────────────────── */
+
+.chip {
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.chip-on {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-dim);
+}
+
+/* ── attachment picker ────────────────────────────────────────────────────── */
+
+.picker {
+  position: absolute;
+  left: 16px;
+  bottom: calc(100% - 4px);
+  z-index: 20;
+  width: min(420px, 100%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.picker-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ── page-level helpers ───────────────────────────────────────────────────── */
+
+/* `.stack-lg` was here. It was the gap between the five stacked panels of the old `/settings`
+   document; that page is a master-detail view now and shows one panel at a time, so nothing
+   wanted a 20px column gap. */
+
+/* A section divider inside a card. `<hr>` rather than a bordered div so it is a real
+   separator to a screen reader. */
+.rule {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+
+.danger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Terminal surfaces (§3–§9 of docs/HERMES-TERMINAL-UI-UX.md)
+ *
+ * The Hermes spec describes a TUI. This app is a web UI, so what is ported is the
+ * *idiom* — monospace chrome, bracketed status badges, ASCII meters, collapsible
+ * banner sections, dock + overlay — rather than an Ink render tree. Everything
+ * below composes the same tokens as the rest of the app; no new colours.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── §3.1 the collapsible startup banner ─────────────────────────────────── */
+
+.banner {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.banner-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  flex-wrap: wrap;
+}
+.banner-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.banner-sigil {
+  color: var(--accent);
+}
+.banner-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.banner-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.banner-chip.is-ok {
+  border-color: var(--status-ok);
+  color: var(--status-ok);
+}
+.banner-chip.is-failed {
+  border-color: var(--status-failed);
+  color: var(--status-failed);
+}
+.banner-chip.is-waiting {
+  border-color: var(--status-waiting);
+  color: var(--status-waiting);
+}
+
+.banner-section {
+  border-bottom: 1px solid var(--border);
+}
+.banner-section:last-child {
+  border-bottom: none;
+}
+.banner-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.banner-toggle:hover {
+  background: var(--surface-hover);
+}
+.banner-caret {
+  font-family: var(--mono);
+  color: var(--muted);
+  width: 12px;
+  flex: 0 0 auto;
+}
+.banner-section-label {
+  font-weight: 600;
+}
+.banner-section-note {
+  color: var(--muted);
+  margin-left: 4px;
+}
+.banner-section-body {
+  padding: 4px 12px 12px 32px;
+}
+.banner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 4px 16px;
+}
+.banner-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  min-width: 0;
+}
+.banner-item-bullet {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.banner-item-name {
+  white-space: nowrap;
+}
+.banner-item-desc {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.banner-pre {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+/* ── §3.2 the status bar ─────────────────────────────────────────────────── */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+.statusbar-sep {
+  color: var(--border-strong);
+  user-select: none;
+}
+.statusbar-model {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+  min-width: 0;
+}
+.statusbar-sigil {
+  color: var(--accent);
+}
+.statusbar-metric {
+  color: var(--text);
+  white-space: nowrap;
+}
+.statusbar-metric.is-muted {
+  color: var(--muted);
+}
+.statusbar-bar {
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+.statusbar-band-green {
+  color: var(--status-ok);
+}
+.statusbar-band-yellow {
+  color: var(--status-waiting);
+}
+.statusbar-band-orange {
+  color: #f97316;
+}
+.statusbar-band-red {
+  color: var(--status-failed);
+}
+
+/* §9.3 — the meter as a control. It keeps the bar's own type and spacing so the reading looks
+   identical whether or not a modal is wired up; only the affordances are added. `all: unset`
+   would strip the focus ring, so the button is reset by hand rather than wholesale. */
+.statusbar-context-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.statusbar-context-button:hover {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+.statusbar-context-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.statusbar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.statusbar-badge.is-live {
+  color: var(--text);
+}
+.statusbar-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.statusbar-yolo {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 7px;
+  border: 1px solid var(--status-waiting);
+  border-radius: var(--radius-sm);
+  color: var(--status-waiting);
+  white-space: nowrap;
+}
+.statusbar-missing {
+  color: var(--muted);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+  white-space: nowrap;
+}
+
+/* ── §3.2/§4.3 the subagent dock ─────────────────────────────────────────── */
+
+.dock {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  flex: 0 0 auto;
+}
+.dock-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+}
+.dock-head-title {
+  color: var(--text);
+}
+.dock-head-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 14px 5px 28px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.dock-row:hover {
+  background: var(--surface-hover);
+}
+.dock-row-prefix {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.dock-row-id {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.dock-row-name {
+  flex: 0 0 auto;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dock-row-activity {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.dock-row-step {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.dock-condensed {
+  padding: 4px 14px 6px;
+  color: var(--muted);
+}
+
+/* ── §4.3 the roster overlay + §5.1 the session switcher ─────────────────── */
+
+.roster {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.roster-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.roster-table th,
+.roster-table td {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.roster-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom-color: var(--border-strong);
+}
+.roster-table td.is-mono,
+.roster-table th.is-mono {
+  font-family: var(--mono);
+}
+.roster-table tbody tr {
+  cursor: pointer;
+}
+.roster-table tbody tr.is-active {
+  background: var(--surface-hover);
+}
+.roster-table tbody tr.is-active td {
+  color: var(--text);
+}
+.roster-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.roster-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.roster-foot kbd {
+  margin-right: 2px;
+}
+kbd {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+/* ── §6.2 the approval overlay ───────────────────────────────────────────── */
+
+.approval {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.approval-kv {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: 12px;
+}
+.approval-kv dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 2px;
+}
+.approval-kv dd {
+  margin: 0;
+  min-width: 0;
+  word-break: break-word;
+}
+.approval-command {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.approval-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.approval-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.approval-option:hover {
+  background: var(--surface-hover);
+}
+.approval-option[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.approval-option-num {
+  font-family: var(--mono);
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.approval-option-label {
+  font-weight: 600;
+}
+.approval-option-note {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* ── §3.3 the composer additions ────────────────────────────────────────── */
+
+.composer-hints {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.composer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.composer-hint.is-active {
+  color: var(--accent);
+}
+/* The paste-collapse pill. A <button> because it lifts the collapse — an affordance the user
+   can act on, not a label. */
+.paste-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 4px;
+  padding: 0 6px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1.7;
+}
+.paste-pill:hover {
+  border-style: solid;
+  color: var(--text);
+}
+.stash-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+.stash-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.stash-row:hover {
+  background: var(--surface-hover);
+}
+.stash-row.is-active {
+  background: var(--accent-dim);
+}
+.stash-row-body {
+  flex: 1;
+  min-width: 0;
+}
+.stash-row-text {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stash-row-meta {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* ── §6.1 the tool-call box states ──────────────────────────────────────── */
+
+.tool-call-box {
+  border-left: 2px solid var(--border-strong);
+}
+.tool-call-box.is-running {
+  border-left-color: var(--status-running);
+}
+.tool-call-box.is-ok {
+  border-left-color: var(--status-ok);
+}
+.tool-call-box.is-failed {
+  border-left-color: var(--status-failed);
+}
+/* The `[⚙] [✓] [✕]` glyph. Coloured by state so it agrees with the border and the dot beside
+   it — three signals for one fact, which is what makes a long transcript scannable. */
+.tool-call-status {
+  font-family: var(--mono);
+  flex: 0 0 auto;
+}
+.tool-call-status.is-running {
+  color: var(--status-running);
+}
+.tool-call-status.is-ok {
+  color: var(--status-ok);
+}
+.tool-call-status.is-failed {
+  color: var(--status-failed);
+}
+
+/* ── accessibility helpers ──────────────────────────────────────────────── */
+
+/* Present to a screen reader, absent on screen. Used where a glyph carries meaning: the `✓` in a
+   tool-call box is not readable as "succeeded" by anything that cannot see it, so the word is
+   rendered alongside it and hidden. `clip-path` rather than `display: none`, because the latter
+   removes it from the accessibility tree too — which would defeat the point. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── §9.3 the context grid (`/context`) ─────────────────────────────────── */
+
+.ctx-grid {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.35;
+  letter-spacing: 1px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NEXS soft UI
+   ──────────────────────────────────────────────────────────────────────────────
+
+   Everything above this line still describes the layout and the structure, and none
+   of it is deleted: this layer changes how a surface is *lit*, and the tokens it
+   reads are the ones declared in `theme.css` under "soft UI".
+
+   Three rules hold throughout, and breaking any one of them makes the result look
+   like a flat design wearing a shadow:
+
+     1. **A surface's background is `--neu-base`.** A raised element on a different
+        background reads as a card with a drop shadow instead of a shape pressed out
+        of the panel.
+     2. **Depth is `box-shadow`, never `border`.** Where a boundary has to be stated,
+        it is an inset or a translucent hairline, so it participates in the lighting.
+     3. **Pressing is the inverse of raising.** A raised control that is active,
+        selected or held goes *in* (`--neu-inset-sm`), which is the whole vocabulary
+        this style has for state.
+
+   The one place a flat fill survives is the accent: a primary button and the brand
+   mark are lit gradients rather than extruded surfaces, because an extruded accent
+   reads as grey plastic and loses the only colour the interface has.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── canvas ───────────────────────────────────────────────────────────────── */
+
+body,
+.app {
+  background: var(--neu-base);
+}
+
+.skip-link {
+  background: var(--neu-base);
+  box-shadow: var(--neu-raised);
+  border-radius: var(--neu-radius-sm);
+}
+
+/* ── the sidebar ──────────────────────────────────────────────────────────────
+ *
+ * One column holding an index: the conversation list, the two link groups, and the way into
+ * Settings. It replaced a 56px rail of unlabelled glyphs *and* a separate 248px work panel, which
+ * is why the `.work-*` rules further down are still named for "the work column" — that column is
+ * this one, and renaming twenty class names to say so would be churn with no reader benefit.
+ *
+ * The brand and the new-session button are the only fixed content at the top; the footer is
+ * fixed at the bottom; everything between them scrolls as one.
+ */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--neu-base);
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 10px 8px;
+  flex: 0 0 auto;
+}
+
+/*
+ * The brand, as a link to the conversation you would otherwise have to hunt for.
+ *
+ * It used to be a `<span>` on the rail, because the rail's head was decoration. It is a link now
+ * because "NEXS" is the one label in the product that everyone will try to click.
+ */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  border-radius: var(--neu-radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+.sidebar-brand:hover {
+  text-decoration: none;
+  box-shadow: var(--neu-raised-sm);
+}
+
+.sidebar-mark {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--neu-radius-sm);
+  /* The accent as a *light* rather than a fill — see rule 3 above. */
+  background: linear-gradient(145deg, #629bff, #3d78e6);
+  box-shadow: var(--neu-raised-sm);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.sidebar-wordmark {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+
+/*
+ * New session.
+ *
+ * A `<button>` rather than a `<NavLink>`: it navigates to `/chat` with no `?session=`, which is
+ * the same route the brand points at, so a link would be a second name for the brand. The button
+ * says *what it does* and the brand says *where you are*.
+ */
+.sidebar-new {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--neu-radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    color var(--speed) ease,
+    box-shadow var(--speed) ease;
+}
+.sidebar-new:hover {
+  color: var(--accent);
+  box-shadow: var(--neu-raised-sm);
+}
+.sidebar-new:focus-visible {
+  color: var(--accent);
+}
+
+/*
+ * The footer: Settings, and nothing else.
+ *
+ * Pinned to the bottom rather than left to follow the conversation list, so it is in the same
+ * place on every screen. A destination that moves depending on how many conversations you have is
+ * a destination you have to look for.
+ */
+.sidebar-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px 10px;
+  border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+/* ── the work column's parts ─────────────────────────────────────────────────
+ *
+ * Named `.work-*` because they were the work panel's. The panel *is* the sidebar now, and the
+ * names stayed: renaming twenty classes to say "sidebar" buys a reader nothing and risks a
+ * silently dropped declaration in whichever one got missed.
+ *
+ * The tab strip that used to open this block is gone. `Sessions` / `Agents` were two lists
+ * fighting over one column, and the filter, the rows and the collapsible section shell below are
+ * what survived.
+ */
+
+.work-primary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--neu-radius-sm);
+  color: var(--text);
+  font-size: 12.5px;
+  text-decoration: none;
+  transition: box-shadow var(--speed) ease;
+}
+.work-primary-row:hover {
+  box-shadow: var(--neu-raised-sm);
+  text-decoration: none;
+}
+
+/*
+ * The destination you are on.
+ *
+ * `aria-current` is set by the router's `NavLink`, not by a comparison written here, so the
+ * highlight cannot disagree with the route table — and it works for a nested route (`/runs/abc`
+ * lights up `Runs`) without a rule about which segments count.
+ *
+ * Drawn as the *pressed* surface rather than a tint, which is the same statement the selected
+ * conversation row makes: it is the only way this style can say "you are here" without
+ * introducing a second surface colour.
+ */
+.work-primary-row[aria-current='page'] {
+  box-shadow: var(--neu-inset-sm);
+}
+.work-primary-row[aria-current='page'] .work-primary-label {
+  font-weight: 600;
+}
+
+.work-primary-glyph {
+  width: 14px;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.8;
+  flex: 0 0 auto;
+  /*
+   * Force text presentation.
+   *
+   * Every glyph in `lib/navigation.ts` is BMP and chosen to render as a single monochrome shape,
+   * but a few (`⚡`, `⚙`, `⏱`) sit in the range where the platform decides, and one of them
+   * rendering in colour is the difference between a sidebar and a bag of stickers.
+   * `font-variant-emoji` is honoured by Chrome and ignored harmlessly elsewhere.
+   */
+  font-variant-emoji: text;
+}
+.work-primary-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.work-kbd {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--neu-text-quaternary);
+}
+
+.work-filter {
+  display: block;
+  padding: 0 10px 8px;
+  flex: 0 0 auto;
+}
+.work-filter-input {
+  width: 100%;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--neu-radius-sm);
+  background: var(--neu-base-sunken);
+  box-shadow: var(--neu-inset-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.work-filter-input::placeholder {
+  color: var(--neu-text-quaternary);
+}
+.work-filter-input:focus {
+  outline: none;
+  box-shadow:
+    var(--neu-inset-sm),
+    0 0 0 2px var(--accent-dim);
+}
+.work-filter-input::-webkit-search-cancel-button {
+  /* The native cancel glyph is a dark asset on every platform, so each theme inverts it by a
+     different amount. See `--neu-icon-filter`. */
+  filter: var(--neu-icon-filter);
+}
+
+.work-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--neu-scroll-thumb) transparent;
+}
+.work-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.work-scroll::-webkit-scrollbar-thumb {
+  background: var(--neu-scroll-thumb);
+  border-radius: 3px;
+}
+
+.work-section {
+  padding: 0 10px 6px;
+}
+
+.work-section-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 0 3px;
+}
+
+.work-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--neu-text-quaternary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.work-section-toggle:hover {
+  color: var(--muted);
+}
+.work-section-caret {
+  width: 8px;
+  font-size: 9px;
+  flex: 0 0 auto;
+}
+.work-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-section-meta {
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.work-section-action {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--neu-text-quaternary);
+  font-size: 13px;
+  line-height: 1;
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+.work-section-action:hover {
+  color: var(--text);
+  box-shadow: var(--neu-raised-sm);
+  text-decoration: none;
+}
+
+/*
+ * The same control with a word in it.
+ *
+ * `.work-section-action` is an 18px square because it holds a single glyph (`+`), which is the
+ * only thing that fits in a 240px column. In the Settings pane there is room to say what the
+ * control does, and a lone `✓` beside a list of notifications is a guess. This is the variant
+ * that carries the sentence — it was `.set-notif-head .work-section-action`, a descendant rule
+ * for a container that no longer exists.
+ */
+.work-section-action-wide {
+  width: auto;
+  height: 22px;
+  padding: 0 8px;
+  gap: 4px;
+  font-size: 10.5px;
+  border-radius: var(--neu-radius-sm);
+}
+
+.work-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.work-note {
+  margin: 0;
+  padding: 4px 6px 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--neu-text-quaternary);
+}
+
+.work-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 6px 2px;
+}
+.work-skel-row {
+  height: 18px;
+  border-radius: 6px;
+}
+
+/* ── panel rows ───────────────────────────────────────────────────────────── */
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+  padding: 0 4px 0 6px;
+  border-radius: var(--neu-radius-sm);
+  transition: box-shadow var(--speed) ease;
+}
+.session-row:hover,
+.session-row:focus-within {
+  box-shadow: var(--neu-raised-sm);
+}
+/* The selected row is *pressed*, not tinted — the only way this style can say "you are here"
+   without introducing a second surface colour. */
+.session-row[data-active='true'] {
+  box-shadow: var(--neu-inset-sm);
+}
+
+.session-open {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.session-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+  flex: 0 0 auto;
+}
+.session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-age {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--neu-text-quaternary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The hover strip. `:focus-within` carries the same reveal, because a hover-only
+   affordance is invisible to anyone tabbing through the panel. */
+.session-actions {
+  display: none;
+  flex: 0 0 auto;
+  gap: 1px;
+}
+.session-row:hover .session-age,
+.session-row:focus-within .session-age {
+  display: none;
+}
+.session-row:hover .session-actions,
+.session-row:focus-within .session-actions {
+  display: flex;
+}
+
+.session-action {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+}
+.session-action:hover {
+  color: var(--text);
+  box-shadow: var(--neu-raised-sm);
+  text-decoration: none;
+}
+.session-action[aria-pressed='true'] {
+  color: var(--accent);
+  box-shadow: var(--neu-inset-sm);
+}
+.session-action-danger:hover {
+  color: var(--status-failed);
+}
+.session-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/*
+ * `.job-*` and `.agent-row*` were here.
+ *
+ * Both belonged to lists the sidebar no longer has. The jobs preview was three upcoming runs with
+ * a fire-now button, duplicating `/schedules` inside the column that is meant to be an index —
+ * and a control that *starts work* is not an index entry. The agents list is the Agents row in
+ * Settings now. Neither had a rule that was doing anything the remaining rows needed, so both
+ * went with their components rather than lingering as declarations nothing can match.
+ */
+
+/* ── account, notifications and theme ─────────────────────────────────────────
+ *
+ * Three things that used to be in the topbar's right corner, then a tab of the 248px work panel,
+ * and are now panels inside Settings — where there is room for them, which the panel never had.
+ * The rules are written for the narrower column they came from, so they read a little tight in a
+ * full-width pane; that is deliberate rather than overlooked, because the alternative was a
+ * second set of rules for the same three controls.
+ */
+
+.work-account {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 2px 6px;
+}
+.work-account-mark {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.work-account-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.work-account-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-account-mail,
+.work-account-org {
+  font-size: 10.5px;
+  color: var(--neu-text-quaternary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-account-org {
+  font-size: 10px;
+}
+
+/* A notification is a button, not a row with a link in it: the whole row is the target and the
+   whole row navigates, which is what the popover this replaced did too. */
+.work-notif {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 6px;
+  width: 100%;
+  padding: 5px 7px;
+  margin-bottom: 1px;
+  border: 0;
+  border-radius: var(--neu-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.work-notif:hover {
+  box-shadow: var(--neu-raised-sm);
+}
+/* Unread is a *tint*, not a weight change: a bolder row would shift every row's height and make
+   the list jump when something is marked read. */
+.work-notif[data-unread='true'] {
+  background: var(--accent-dim);
+}
+.work-notif-title {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-notif-age {
+  font-size: 9.5px;
+  color: var(--neu-text-quaternary);
+  white-space: nowrap;
+}
+.work-notif-body {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.work-theme {
+  display: flex;
+  gap: 5px;
+  padding: 2px 2px 4px;
+}
+.work-theme .chip {
+  flex: 1;
+  padding: 5px 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.work-theme .chip-on {
+  color: var(--accent);
+}
+
+/* ── main pane ────────────────────────────────────────────────────────────── */
+
+/*
+ * The work surface is the one thing in the shell that is *raised*. Everything else sits flush
+ * on the canvas and extrudes only its contents. That is the whole hierarchy statement in the
+ * design — the task physically sits above the navigation — and it is done with light rather
+ * than with a colour, a size or a border.
+ */
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  border-radius: var(--neu-radius) 0 0 0;
+  background: var(--neu-base);
+  box-shadow: var(--neu-raised-lg);
+}
+
+.topbar {
+  height: 46px;
+  padding: 0 14px;
+  gap: 8px;
+  border-bottom: var(--neu-hairline);
+  background: transparent;
+}
+
+.content {
+  padding: 16px;
+}
+
+/*
+ * The chat route opts out of the page padding and out of the document scroll.
+ *
+ * Every other page is a document that scrolls; chat cannot be, because the composer has to stay
+ * reachable while a long transcript scrolls behind it. The shell knows the route, so it says so
+ * on the element rather than making twenty pages' worth of CSS conditional on a descendant
+ * selector.
+ */
+.content-flush {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ── chat ─────────────────────────────────────────────────────────────────── */
+
+.chat-main {
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
+  border-bottom: var(--neu-hairline);
+  flex: 0 0 auto;
+}
+.chat-head-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.chat-head-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.chat-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-dock {
+  flex: 0 0 auto;
+  padding: 0 16px 12px;
+}
+
+.chat-stopped {
+  padding: 0 16px 8px;
+}
+
+/* ── the empty-chat hero ──────────────────────────────────────────────────── */
+
+.chat-hero {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  overflow: hidden;
+}
+
+.chat-hero-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 100%;
+  text-align: center;
+}
+
+.chat-hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: var(--neu-text-quaternary);
+}
+
+.chat-hero-body {
+  margin: 0;
+  /* A reading measure, not a `ch` count: 46ch of a 12px sans came out around 300px, which broke
+     the two-line sentence into three ragged lines under a wordmark four times its width. */
+  max-width: 34rem;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.chat-hero-extra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+/*
+ * The wordmark.
+ *
+ * Isolated in one rule, because the display face is a brand decision and everything around it
+ * — the sizing, the centring, the interaction rules — is a layout decision, and the two change
+ * on different schedules. Swapping the stack below is the whole of a rebrand.
+ *
+ * The engraved treatment is the same two lights as every other surface, applied to text: a
+ * highlight up-left and a shadow down-right. That is what makes it read as pressed into the
+ * canvas rather than printed on top of it, and it is the one place the style touches type.
+ */
+.wordmark {
+  display: block;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-weight: 900;
+  font-size: clamp(38px, 7.2vw, 112px);
+  line-height: 0.84;
+  letter-spacing: -0.055em;
+  text-transform: uppercase;
+  color: var(--text);
+  /*
+   * Engraved, and the geometry is the *inverse* of every box-shadow in this file on purpose.
+   *
+   * A raised shape is lit from the top left: highlight up-left, shadow down-right. A shape
+   * *pressed into* the surface is the same light source seen from inside the recess — the upper
+   * lip shades the top-left, the lower lip catches the light at the bottom-right. So the dark
+   * comes first and the highlight second, which is the reverse of `--neu-raised`.
+   *
+   * Both colours are tokens because the pair only works as a pair: on dark it is white-at-5%
+   * below and black-at-80% above, on light it is white-at-95% below and ink-at-20% above.
+   */
+  text-shadow:
+    1px 1px 0 var(--neu-engrave-light),
+    -2px -2px 7px var(--neu-engrave-dark);
+  pointer-events: none;
+  user-select: none;
+}
+.wordmark-gap {
+  display: inline-block;
+  width: 0.2em;
+}
+.wordmark-thin {
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+
+.hero-runas {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--neu-text-quaternary);
+}
+.hero-runas-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+/* ── controls ─────────────────────────────────────────────────────────────── */
+
+.btn {
+  border: 0;
+  border-radius: var(--neu-radius-sm);
+  background: var(--neu-base);
+  color: var(--text);
+  box-shadow: var(--neu-raised-sm);
+}
+.btn:hover:not(:disabled) {
+  background: var(--neu-base);
+  box-shadow: var(--neu-raised);
+}
+.btn:active:not(:disabled) {
+  box-shadow: var(--neu-inset-sm);
+}
+.btn:disabled {
+  box-shadow: var(--neu-raised-sm);
+  opacity: 0.5;
+}
+
+/* The accent stays a lit gradient: an extruded accent reads as grey plastic. */
+.btn-primary {
+  background: linear-gradient(145deg, #629bff, #3d78e6);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(145deg, #6ea4ff, #3d78e6);
+}
+.btn-danger {
+  background: linear-gradient(145deg, #f2685f, #d63a37);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: linear-gradient(145deg, #f5776e, #d63a37);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  box-shadow: var(--neu-raised-sm);
+}
+
+.input,
+.select,
+.textarea {
+  border: 0;
+  border-radius: var(--neu-radius-sm);
+  background: var(--neu-base-sunken);
+  color: var(--text);
+  box-shadow: var(--neu-inset-sm);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  box-shadow:
+    var(--neu-inset-sm),
+    0 0 0 2px var(--accent-dim);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--neu-text-quaternary);
+}
+
+.card {
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-base);
+  box-shadow: var(--neu-raised);
+}
+.card-head {
+  border-bottom: var(--neu-hairline);
+}
+
+.badge {
+  border: 0;
+  box-shadow: var(--neu-inset-sm);
+}
+
+.chip {
+  border: 0;
+  box-shadow: var(--neu-raised-sm);
+}
+.chip-on {
+  color: var(--text);
+  box-shadow: var(--neu-inset-sm);
+}
+
+.tabs {
+  border-bottom: var(--neu-hairline);
+}
+.tab {
+  border: 0;
+  border-radius: var(--neu-radius-sm) var(--neu-radius-sm) 0 0;
+}
+.tab[aria-selected='true'] {
+  box-shadow: var(--neu-raised-sm);
+}
+
+.scrim {
+  background: var(--neu-scrim);
+}
+.modal,
+.drawer,
+.picker,
+.roster {
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-base);
+  box-shadow: var(--neu-raised-lg);
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid var(--neu-table-rule);
+}
+.table tbody tr:hover {
+  background: var(--neu-row-hover);
+}
+
+.skeleton {
+  background: var(--neu-base-sunken);
+  box-shadow: var(--neu-inset-sm);
+  border-radius: var(--neu-radius-sm);
+}
+
+/* The terminal surfaces (§3.1, §3.2, §4.3) lose their borders and gain the same soft edge as
+   everything else. They keep their own internal layout untouched. */
+.banner,
+.statusbar,
+.dock {
+  border: 0;
+  border-radius: var(--neu-radius-sm);
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* ── composer ─────────────────────────────────────────────────────────────── */
+
+.composer {
+  border: 0;
+  padding: 0;
+}
+.composer-input-wrap {
+  border: 0;
+  border-radius: var(--neu-radius);
+  background: var(--neu-base-sunken);
+  box-shadow: var(--neu-inset);
+}
+.composer-input-wrap:focus-within {
+  box-shadow:
+    var(--neu-inset),
+    0 0 0 2px var(--accent-dim);
+}
+.composer-input {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.composer-bar {
+  border-top: var(--neu-hairline);
+}
+
+/* ── the surfaces the pages own ───────────────────────────────────────────────
+ *
+ * The shell and the primitives are not the whole application: a transcript, a tool box, an
+ * approval drawer and a stat tile each draw their own surface, and a page left with a 1px
+ * `--border` outline beside neumorphic neighbours reads as a different product bolted on.
+ *
+ * Three borders below are deliberately **kept**, because they are signals rather than edges:
+ *
+ *  - `.message-live`'s dashed accent — "this text is provisional and is not a saved row";
+ *  - `.paste-pill`'s dashed outline — "this range is a pasted pill, not typed text";
+ *  - `.tool-call-box`'s left bar — the three-state marker from §6.1.
+ *
+ * Everything else becomes an inset well or a raised surface, so it participates in the lighting.
+ */
+
+.message {
+  border: 0;
+  background: var(--neu-base-sunken);
+  box-shadow: var(--neu-inset-sm);
+}
+/* The accent tint is a *role* marker — who is speaking — so it survives; it just gains depth. */
+.message-user {
+  background: var(--accent-dim);
+  box-shadow: var(--neu-raised-sm);
+}
+.message-tool {
+  background: var(--neu-base-sunken);
+}
+.message-live {
+  /* The dashed accent stays: it is the one thing that says the text is still arriving. */
+  box-shadow: var(--neu-inset-sm);
+}
+
+.stat,
+.tool-call,
+.completion {
+  border: 0;
+  background: var(--neu-base);
+  box-shadow: var(--neu-raised-sm);
+}
+
+.approval-command,
+.ctx-grid,
+.banner-pre {
+  border: 0;
+  background: var(--neu-base-sunken);
+  box-shadow: var(--neu-inset-sm);
+}
+
+.approval-option {
+  border: 0;
+  box-shadow: var(--neu-raised-sm);
+}
+.approval-option:hover:not([disabled]) {
+  box-shadow: var(--neu-raised);
+}
+
+.banner-chip,
+.statusbar-title,
+.roster-foot kbd {
+  border: 0;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* The skeleton rule above sets the inset; the original outline is still on the element. */
+.skeleton {
+  border: 0;
+}
+
+
+/* ── the terminal (`/cli`) ────────────────────────────────────────────────────
+ *
+ * The screen is an *inset well* rather than a raised surface, and that is the one decision in
+ * this block worth stating. Everything in this app extrudes out of the canvas; a terminal is a
+ * hole you look into, and the same rule that makes a raised card read as a card makes a raised
+ * terminal read as a card with code in it. So `.cli-screen` and the prompt line are cut in.
+ *
+ * The tones are the whole vocabulary: what you typed, what came back, what failed, what the
+ * runtime said about it, and the evaluated value. The value gets its own colour because it is
+ * the one line in the transcript the *engine* produced rather than the code.
+ */
+
+.cli {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 14px 16px 12px;
+}
+
+.cli-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.cli-head-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.cli-head-note {
+  font-size: 10.5px;
+  color: var(--neu-text-quaternary);
+}
+.cli-head-link {
+  font-size: 11px;
+}
+.cli-session {
+  display: inline-flex;
+}
+
+.cli-screen {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: var(--neu-radius);
+  background: var(--neu-base-sunken);
+  box-shadow: var(--neu-inset);
+  cursor: text;
+  scrollbar-width: thin;
+  scrollbar-color: var(--neu-scroll-thumb) transparent;
+}
+.cli-screen::-webkit-scrollbar {
+  width: 6px;
+}
+.cli-screen::-webkit-scrollbar-thumb {
+  background: var(--neu-scroll-thumb);
+  border-radius: 3px;
+}
+
+.cli-line {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  /* Wrapped rather than scrolled sideways: a `pre` that overflows horizontally hides the end of
+     a long error message behind a scrollbar most people will not look for. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+.cli-line[data-tone='input'] {
+  color: var(--muted);
+}
+.cli-line[data-tone='note'] {
+  color: var(--neu-text-quaternary);
+}
+.cli-line[data-tone='err'] {
+  color: var(--status-failed);
+}
+.cli-line[data-tone='ok'] {
+  color: var(--accent);
+}
+
+.cli-prompt {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: var(--neu-radius-sm);
+  background: var(--neu-base-sunken);
+  box-shadow: var(--neu-inset-sm);
+}
+.cli-prompt:focus-within {
+  box-shadow:
+    var(--neu-inset-sm),
+    0 0 0 2px var(--accent-dim);
+}
+.cli-prompt-mark {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--accent);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.cli-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  /* One row that grows to fit a multi-line draft: Shift+Enter is legal input and a box that
+     clipped it would hide what was about to be run. */
+  resize: none;
+  min-height: 18px;
+  max-height: 120px;
+  outline: none;
+}
+.cli-input::placeholder {
+  color: var(--neu-text-quaternary);
+}
+
+.cli-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 0 2px;
+  font-size: 10.5px;
+  color: var(--neu-text-quaternary);
+}
+.cli-foot span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cli-foot-hint {
+  flex: 0 0 auto;
+}
+
+/* ── the settings view ────────────────────────────────────────────────────────
+ *
+ * A master-detail: the section list on the left, the selected panel on the right, each with its
+ * own scroll. `/settings` is a flush route — see `FLUSH_ROUTES` in `AppShell.tsx` — so this fills
+ * the content region rather than being a document inside it. Two columns inside a scrolling
+ * document is two scrollbars fighting over one gesture.
+ *
+ * The section list is `--neu-base`, the same material as the sidebar, because it *is* the same
+ * kind of thing: a column of destinations. That also puts the hover and current-row shadows on
+ * the surface they were calibrated against, which is the rule stated at the top of this file.
+ */
+
+.settings {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 8px 18px 12px;
+  background: var(--neu-base);
+  /* The only line between the two columns. In the light theme the canvas and `--neu-base` are the
+     same colour, so without it the list and the panel are one undivided sheet. */
+  border-right: var(--neu-hairline);
+  scrollbar-width: thin;
+  scrollbar-color: var(--neu-scroll-thumb) transparent;
+}
+.settings-nav::-webkit-scrollbar {
+  width: 6px;
+}
+.settings-nav::-webkit-scrollbar-thumb {
+  background: var(--neu-scroll-thumb);
+  border-radius: 3px;
+}
+
+.settings-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.settings-nav-heading {
+  margin: 0;
+  padding: 0 8px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--neu-text-quaternary);
+}
+
+.settings-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * A section, as a `<button>`.
+ *
+ * Not a link: selecting a panel is a change of view rather than a navigation, and the URL is
+ * updated with `replace` so the history is not filled with the panels someone clicked through on
+ * the way to the one they wanted. The user-agent button styling is reset here, or the glyph and
+ * label would sit on a grey rectangle in the middle of a soft surface.
+ */
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--neu-radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow var(--speed) ease;
+}
+.settings-nav-item:hover {
+  box-shadow: var(--neu-raised-sm);
+}
+/* The same statement the sidebar's current row and the selected conversation make: pressed,
+   not tinted. */
+.settings-nav-item[aria-current='true'] {
+  box-shadow: var(--neu-inset-sm);
+}
+.settings-nav-item[aria-current='true'] .settings-nav-label {
+  font-weight: 600;
+}
+.settings-nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings-nav-glyph {
+  width: 14px;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.8;
+  flex: 0 0 auto;
+  /* Force text presentation — see the note on `.work-primary-glyph`. */
+  font-variant-emoji: text;
+}
+
+.settings-nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.settings-pane-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 18px 22px 12px;
+  flex: 0 0 auto;
+}
+.settings-pane-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--text);
+}
+.settings-pane-blurb {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.settings-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 22px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--neu-scroll-thumb) transparent;
+}
+.settings-pane-body::-webkit-scrollbar {
+  width: 6px;
+}
+.settings-pane-body::-webkit-scrollbar-thumb {
+  background: var(--neu-scroll-thumb);
+  border-radius: 3px;
+}
+
+/* A count in a directory panel, set as a figure rather than as a word in a sentence. */
+.settings-count {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The `.btn` rules are written for a `<button>`, and this one is an `<a>` — the global anchor rule
+ * would underline it on hover, which no other button in the product does.
+ */
+.settings-open:hover {
+  text-decoration: none;
+}
+
+/* ── the session info card ────────────────────────────────────────────────── */
+
+.session-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.session-card-lead {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.session-card-run {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--neu-radius-sm);
+  box-shadow: var(--neu-inset-sm);
+}
+
+/* ── the model chip in the chat header ────────────────────────────────────── */
+
+.chat-head-model {
+  max-width: 24ch;
+  padding: 1px 8px;
+  border-radius: 999px;
+  box-shadow: var(--neu-inset-sm);
+  font-size: 10.5px;
+  color: var(--neu-text-quaternary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── "Thinking" ───────────────────────────────────────────────────────────── */
+
+/*
+ * The header of an assistant turn, as a disclosure.
+ *
+ * `.message-head` is already a flex row; these rules add the affordances of a `<summary>` on top
+ * of it — a pointer, a caret, and the removal of the browser's own marker, which draws a second
+ * triangle beside ours.
+ */
+.thinking-summary {
+  cursor: pointer;
+  list-style: none;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border-radius: var(--neu-radius-sm);
+}
+.thinking-summary::-webkit-details-marker {
+  display: none;
+}
+.thinking-summary:hover {
+  box-shadow: var(--neu-raised-sm);
+}
+
+/*
+ * The caret, drawn from `::before` rather than as text.
+ *
+ * A text glyph cannot be swapped by CSS, so the character would have to come from React state
+ * and the disclosure would stop being a `<details>` in any meaningful sense. This way the
+ * rotation is the browser's own `[open]` attribute and nothing has to re-render.
+ */
+.thinking-caret {
+  width: 9px;
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--neu-text-quaternary);
+}
+.thinking-caret::before {
+  content: '›';
+}
+.message-thinking[open] > .thinking-summary > .thinking-caret::before {
+  content: '⌄';
+}
+
+/*
+ * The trace.
+ *
+ * The left rule is the whole visual argument: these rows are inside the message, not beside it.
+ * A borderless indent reads as a sibling list, which is exactly what a tool call is not.
+ */
+.thinking-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 2px 4px;
+  padding-left: 14px;
+  border-left: var(--neu-hairline);
+}
+.thinking-body .tool-calls {
+  gap: 4px;
+}
+

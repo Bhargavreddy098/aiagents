@@ -1,0 +1,49 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nexs
+          POSTGRES_PASSWORD: nexs
+          POSTGRES_DB: nexs_test
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nexs" --health-interval 5s
+          --health-timeout 3s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://nexs:nexs@localhost:5433/nexs_test?schema=public
+      JWT_SECRET: ci-jwt-secret-that-is-at-least-32-chars-long
+      NEXS_MASTER_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # prisma client must exist before typecheck (types come from the generated client)
+      - run: pnpm generate
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+
+      # e2e runs from Phase 6 onwards; browsers need their system deps in CI
+      - run: pnpm exec playwright install --with-deps chromium
+        if: ${{ hashFiles('e2e/playwright.config.ts') != '' }}
+        continue-on-error: true
+
+      - run: pnpm test
+      - run: pnpm build

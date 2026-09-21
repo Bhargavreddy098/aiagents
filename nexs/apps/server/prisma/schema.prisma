@@ -1,0 +1,1097 @@
+// NEXS Agent Control Plane — canonical schema
+// Sources merged:
+//   - nexs-build-spec.md §3 (43 models, the widest coverage)
+//   - docs/02-DATA-MODEL.md (newer decisions: ModelUsage, PasswordReset, token
+//     families, McpServer.pid, Run.agentVersionId/heartbeat/correlationId,
+//     Schedule.timezone, Event.externalId, Unsupported vector, Tool.capabilities)
+//   - docs/GAPS-AND-FIXES.md §0 (ChatSession, idempotency scoping, webhook dedupe)
+//   - nexs-build-spec-patch.md Part A (the relation fixes)
+//
+// DESIGN RULE (this is what fixes docs/02's 11 validation errors):
+//   `tenantId` is a PLAIN INDEXED SCALAR on child models — it is deliberately NOT a
+//   Prisma relation. Tenant isolation is enforced structurally in the repository
+//   layer (every method takes tenantId first and includes it in every `where`),
+//   not by the ORM. Declaring `Tenant.agents Agent[]` without an opposite relation
+//   field is what made docs/02 fail validation.
+//   Parent→child navigations that are genuinely traversed (Run→steps, Agent→versions)
+//   DO get real two-sided relations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ══════════════════════════════ tenancy & auth ══════════════════════════════
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String   @default("Personal")
+  // [v2 UI-UX S5.6] The command owner: the one identity allowed to run privileged commands
+  // and to grant an exec approval (S4.4). Nullable on purpose -- an unowned workspace can
+  // grant nothing, which is the safe reading of "no owner configured yet" and is materially
+  // different from "everyone is the owner".
+  ownerUserId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  // Globally unique, NOT @@unique([tenantId, email]).
+  // Rationale: POST /api/auth/login takes only {email, password}, so email alone must
+  // identify exactly one account — otherwise login needs a tenant slug. A tenant may
+  // still hold many users; only cross-tenant email reuse is disallowed.
+  email         String   @unique
+  passwordHash  String
+  name          String
+  // [gap #11] refresh-token family rotation — see RefreshToken.family
+  activeTokenFamily String?
+  tokenVersion      Int  @default(0)
+  refreshTokens RefreshToken[]
+  passwordResets PasswordReset[]
+  notifications Notification[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([tenantId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family    String    // [gap #11] reuse of a revoked token revokes the whole family
+  tokenHash String    @unique // sha256 of the opaque token; never the token itself
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  @@index([family])
+  @@index([userId])
+}
+
+// [gap #12] password reset — hashed, single-use, expiring
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  @@index([userId])
+}
+
+// ══════════════════════════ providers, vault & models ═══════════════════════
+
+model ModelProvider {
+  id             String    @id @default(cuid())
+  tenantId       String
+  name           String
+  slug           String
+  type           String // openai | anthropic | google | openai-compatible | azure-openai |
+  // groq | mistral | deepseek | xai | together | openrouter | local | ollama
+  baseUrl        String?
+  apiKeyRef      String? // → Credential.id. NEVER the raw key.
+  organizationId String?
+  projectId      String?
+  enabled        Boolean   @default(true)
+  status         String    @default("unverified") // unverified|healthy|degraded|error
+  lastHealthCheck DateTime?
+  lastModelSync  DateTime?
+  modelCount     Int       @default(0)
+  capabilities   String[]  @default([])
+  metadata       Json      @default("{}")
+  models         Model[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+// the vault row — plaintext keys never leave VaultService
+model Credential {
+  id        String    @id @default(cuid())
+  tenantId  String
+  label     String // "OpenAI key"
+  kind      String // api_key | oauth | token
+  encrypted String // v1:<base64 nonce>:<base64 ciphertext+tag>
+  keyPrefix String // "sk-…abcd" for UI masking only
+  rotatedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  @@index([tenantId])
+}
+
+model Model {
+  id              String        @id @default(cuid())
+  tenantId        String
+  providerId      String
+  provider        ModelProvider @relation(fields: [providerId], references: [id])
+  name            String // display name
+  externalModelId String // EXACT provider id, e.g. "gpt-4o-2024-08-06"
+  type            String // chat | embedding | image
+  status          String        @default("available") // available|unavailable|deprecated
+  capabilities    String[]      @default([])
+  contextWindow   Int?
+  maxOutputTokens Int?
+  // [gap #8] embeddingDimension for embed models; [gap #20] fallback ordering
+  metadata        Json          @default("{}")
+  fallbackOf      String? // model-level default fallback chain [gap #20]
+  enabled         Boolean       @default(true)
+  usage           ModelUsage[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  @@unique([providerId, externalModelId])
+  @@index([tenantId])
+}
+
+// tenant-level routing policy (overrides the model-level default)
+model GatewayRoute {
+  id              String  @id @default(cuid())
+  tenantId        String
+  modelId         String
+  fallbackModelId String?
+  priority        Int     @default(0)
+  enabled         Boolean @default(true)
+  @@index([tenantId])
+}
+
+// [gap #7] every number on screen traces to a row here
+model ModelUsage {
+  id               String   @id @default(cuid())
+  tenantId         String
+  runId            String?
+  run              Run?     @relation(fields: [runId], references: [id])
+  stepId           String?
+  modelId          String
+  model            Model    @relation(fields: [modelId], references: [id])
+  providerId       String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  latencyMs        Int?
+  costEstimate     Float    @default(0) // from Model.metadata price snapshot
+  cached           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  @@index([tenantId, createdAt])
+  @@index([runId])
+}
+
+// ═══════════════════════════ tools, mcp, connectors ═════════════════════════
+
+model Tool {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  source             String // "builtin" | "mcp:<serverId>" | "connector:<id>"
+  name               String
+  description        String?
+  type               String // native|mcp|connector|browser|sandbox|plugin
+  provider           String? // "native" | mcp server id | connector id
+  inputSchema        Json     @default("{}")
+  // [gap #14] vocabulary: read_only | external_side_effect | writes_files | search |
+  // http | browser | sandbox_exec | memory | notify | transform | calculation
+  capabilities       String[] @default([])
+  status             String   @default("enabled") // enabled|disabled|error
+  mcpServerId        String?
+  mcpServer          McpServer? @relation(fields: [mcpServerId], references: [id])
+  connectorAccountId String?
+  metadata           Json     @default("{}")
+  toolCalls          ToolCall[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@unique([tenantId, source, name])
+  @@index([tenantId])
+}
+
+model McpServer {
+  id              String    @id @default(cuid())
+  tenantId        String
+  name            String
+  transport       String // stdio | streamable-http
+  command         String?
+  args            String[]  @default([])
+  url             String?
+  headers         Json      @default("{}")
+  envRef          String? // → Credential.id
+  status          String    @default("disconnected") // disconnected|connecting|connected|error|crashed
+  pid             Int? // [gap #22] child process tracking, kill on shutdown
+  lastConnectedAt DateTime?
+  lastError       String?
+  tools           MCPTool[]
+  canonicalTools  Tool[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  @@index([tenantId])
+}
+
+model MCPTool {
+  id          String    @id @default(cuid())
+  serverId    String
+  server      McpServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  externalId  String
+  name        String
+  description String?
+  inputSchema Json      @default("{}")
+  enabled     Boolean   @default(true)
+  toolId      String?   @unique // → canonical Tool.id after registration
+  @@unique([serverId, externalId])
+}
+
+model Connector {
+  id                  String             @id @default(cuid())
+  tenantId            String
+  type                String // gmail|google_calendar|slack|github|notion|drive|rest|webhook
+  name                String
+  status              String             @default("disconnected") // connected|disconnected|error
+  capabilityDiscovery Json               @default("[]")
+  metadata            Json               @default("{}")
+  accounts            ConnectorAccount[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  @@index([tenantId])
+}
+
+model ConnectorAccount {
+  id           String    @id @default(cuid())
+  connectorId  String
+  connector    Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  label        String
+  accountId    String?
+  credentialId String? // → Credential.id
+  scopes       String[]  @default([])
+  status       String    @default("active")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// ═══════════════════════════════════ agents ═════════════════════════════════
+
+model Agent {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  name                String
+  description         String?
+  instructions        String   @default("")
+  modelId             String?
+  fallbackModelId     String?
+  toolIds             String[] @default([]) // canonical Tool.id allowlist
+  mcpServerIds        String[] @default([])
+  connectorAccountIds String[] @default([])
+  memoryEnabled       Boolean  @default(true)
+  browserAccess       Boolean  @default(false)
+  sandboxAccess       Boolean  @default(false)
+  approvalPolicy      Json     @default("{\"mode\":\"risk-based\"}")
+  executionLimits     Json     @default("{\"maxSteps\":50,\"maxDurationMs\":600000,\"maxToolCalls\":100,\"maxContextTokens\":100000}")
+  version             Int      @default(1)
+  activeVersionId     String?
+  status              String   @default("draft") // draft|active|paused|disabled|archived
+  archivedAt          DateTime?
+  versions            AgentVersion[]
+  runs                Run[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  @@index([tenantId, status])
+}
+
+// immutable config snapshot written on every update
+model AgentVersion {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  version   Int
+  config    Json // full frozen config at this version
+  createdAt DateTime @default(now())
+  runs      Run[]
+  @@unique([agentId, version])
+}
+
+// ═══════════════════════ goals, tasks, workflows, schedules ═════════════════
+
+model Goal {
+  id                      String    @id @default(cuid())
+  tenantId                String
+  title                   String
+  description             String?
+  agentId                 String?
+  status                  String    @default("draft") // draft|active|paused|blocked|completed|failed|cancelled
+  priority                Int       @default(3)
+  criteria                Json      @default("[]") // machine-checkable goal_criteria
+  constraints             Json      @default("[]")
+  deadline                DateTime?
+  completedVerificationId String? // MUST reference a passing Verification
+  tasks                   Task[]
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  completedAt             DateTime?
+  @@index([tenantId, status])
+}
+
+model Task {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  title               String
+  description         String?
+  goalId              String?
+  goal                Goal?     @relation(fields: [goalId], references: [id])
+  agentId             String?
+  workflowId          String?
+  status              String    @default("queued") // queued|running|paused|waiting_approval|completed|failed|cancelled
+  priority            Int       @default(3)
+  triggerType         String    @default("manual") // immediate|scheduled|recurring|event|manual
+  scheduledAt         DateTime?
+  scheduleId          String?
+  eventSubscriptionId String?
+  input               Json      @default("{}")
+  output              Json?
+  error               String?
+  retryCount          Int       @default(0)
+  idempotencyKey      String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  runs                Run[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, scheduledAt])
+}
+
+model Workflow {
+  id              String            @id @default(cuid())
+  tenantId        String
+  name            String
+  description     String?
+  status          String            @default("draft") // draft|active|disabled|archived
+  activeVersionId String?
+  versions        WorkflowVersion[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  @@index([tenantId])
+}
+
+model WorkflowVersion {
+  id         String         @id @default(cuid())
+  workflowId String
+  workflow   Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  version    Int
+  steps      WorkflowStep[]
+  createdAt  DateTime       @default(now())
+  @@unique([workflowId, version])
+}
+
+model WorkflowStep {
+  id          String          @id @default(cuid())
+  versionId   String
+  version     WorkflowVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  position    Int
+  name        String
+  stepType    String // ai|tool|connector|mcp|browser|sandbox|approval|condition|verification|transform|notification
+  config      Json
+  dependsOn   String[]        @default([])
+  retryPolicy Json            @default("{\"maxRetries\":2,\"backoffMs\":1000}")
+  timeoutMs   Int?
+  onFail      String          @default("stop") // stop|continue|retry_then_stop
+  @@unique([versionId, position])
+}
+
+model Schedule {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  name                String
+  kind                String // one_time | recurring | event
+  cron                String?
+  timezone            String    @default("UTC") // [gap #13] IANA tz, passed to pg-boss per-schedule
+  runAt               DateTime?
+  eventSubscriptionId String?
+  targetKind          String // task | workflow
+  targetId            String
+  enabled             Boolean   @default(true)
+  lastFiredAt         DateTime?
+  nextFireAt          DateTime? // stored UTC
+  // [v2 UI-UX S10] Where a fired schedule output is delivered:
+  // { channelType, accountId?, peerRef? }. Null means deliver-nowhere: the run and its
+  // execution receipt still exist, and only the channel post is skipped.
+  deliveryTarget      Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  @@index([tenantId, enabled])
+}
+
+// ══════════════════════════════ events ══════════════════════════════════════
+
+model Event {
+  id              String              @id @default(cuid())
+  tenantId        String
+  type            String
+  source          String
+  subject         String?
+  // [gap #10] webhook replay protection; NULL is allowed and not deduped
+  externalId      String?
+  payload         Json
+  metadata        Json                @default("{}")
+  occurredAt      DateTime            @default(now())
+  processedAt     DateTime?
+  subscriptions   EventSubscription[]
+  @@unique([tenantId, source, externalId])
+  @@index([tenantId, type])
+}
+
+model EventSubscription {
+  id        String   @id @default(cuid())
+  tenantId  String
+  topic     String
+  filter    Json     @default("{}") // partial match on {source, subject}
+  targetKind String // goal|task|workflow|agent
+  targetId  String
+  secret    String? // [gap #26] HMAC verification for inbound webhooks
+  enabled   Boolean  @default(true)
+  eventId   String?
+  event     Event?   @relation(fields: [eventId], references: [id])
+  createdAt DateTime @default(now())
+  @@index([tenantId, topic])
+}
+
+// ═══════════════════════════ execution (the core) ═══════════════════════════
+
+model Run {
+  id              String    @id @default(cuid())
+  tenantId        String
+  agentId         String?
+  agent           Agent?    @relation(fields: [agentId], references: [id])
+  // [gap #15] pin the exact config version at start; never re-read the live Agent
+  agentVersionId  String?
+  agentVersion    AgentVersion? @relation(fields: [agentVersionId], references: [id])
+  goalId          String?
+  taskId          String?
+  task            Task?     @relation(fields: [taskId], references: [id])
+  workflowId      String?
+  kind            String    @default("task") // chat|task|workflow|goal|research|event
+  status          String    @default("queued") // queued|planning|running|waiting_approval|paused|completed|failed|cancelled|timeout
+  plan            Json? // visible structured plan — NOT raw chain-of-thought
+  input           Json      @default("{}")
+  output          Json?
+  error           String?
+  checkpoint      Json?
+  idempotencyKey  String?
+  correlationId   String    @default(cuid()) // [gap #30] traces logs ↔ rows
+  lastHeartbeatAt DateTime? // [gap #4] zombie-run detection
+  startedAt       DateTime?
+  completedAt     DateTime?
+  durationMs      Int?
+  steps           Step[]
+  toolCalls       ToolCall[]
+  verifications   Verification[]
+  modelUsage      ModelUsage[]
+  chatMessages    ChatMessage[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status])
+  @@index([tenantId, lastHeartbeatAt])
+}
+
+model Step {
+  id             String     @id @default(cuid())
+  runId          String
+  run            Run        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  seq            Int
+  position       Int
+  description    String?
+  name           String
+  stepType       String // plan|model|tool|mcp|connector|browser|sandbox|approval|verification|transform|notification|condition
+  toolId         String?
+  modelId        String?
+  verificationId String?
+  status         String     @default("pending") // pending|running|waiting_approval|completed|failed|skipped
+  input          Json?
+  output         Json?
+  error          String?
+  checkpoint     Json?
+  // [gap #9] scope is (runId, seq, attempt) — enforced by the unique below
+  idempotencyKey String
+  attempt        Int        @default(0)
+  retryCount     Int        @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  toolCalls      ToolCall[]
+  @@unique([runId, seq, attempt])
+  @@index([runId])
+}
+
+// side effects are recorded here BEFORE the step is marked complete → replay-safe
+model ToolCall {
+  id         String    @id @default(cuid())
+  tenantId   String
+  runId      String?
+  run        Run?      @relation(fields: [runId], references: [id])
+  stepId     String?
+  step       Step?     @relation(fields: [stepId], references: [id])
+  toolId     String
+  tool       Tool      @relation(fields: [toolId], references: [id])
+  args       Json
+  result     Json?
+  error      String?
+  status     String    @default("requested") // requested|executed|failed
+  sideEffect Boolean   @default(false) // [gap #14] mirrors Tool.capabilities
+  durationMs Int?
+  receipt    ExecutionReceipt?
+  createdAt  DateTime  @default(now())
+  @@index([runId])
+  @@index([stepId])
+}
+
+model ExecutionReceipt {
+  id             String   @id @default(cuid())
+  tenantId       String
+  toolCallId     String   @unique
+  toolCall       ToolCall @relation(fields: [toolCallId], references: [id], onDelete: Cascade)
+  effect         Json // what actually happened (row written, file saved, ...)
+  idempotencyKey String
+  evidence       Json     @default("{}")
+  createdAt      DateTime @default(now())
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  tenantId   String
+  runId      String?
+  run        Run?      @relation(fields: [runId], references: [id])
+  stepId     String?
+  goalId     String?
+  type       String // schema|content|http_response|file_exists|tool_result|browser_state|goal_criteria|human
+  scope      String    @default("step") // step | goal_criteria
+  config     Json      @default("{}")
+  passed     Boolean?
+  status     String    @default("pending") // pending|passed|failed
+  evidence   Json?
+  createdAt  DateTime  @default(now())
+  completedAt DateTime?
+  @@index([runId])
+}
+
+// ═══════════════════════════ approvals (human-in-the-loop) ══════════════════
+
+model Action {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  runId               String?
+  agentId             String?
+  kind                String
+  title               String
+  description         String?
+  payload             Json
+  risk                Json      @default("{}") // { level: low|medium|high, reasons: [] }
+  requiredPermissions String[]  @default([])
+  status              String    @default("pending") // pending|approved|rejected|executed|expired
+  // Approval owns the FK (see Approval.actionId). Action navigates back via `approval`.
+  approval            Approval?
+  createdAt           DateTime  @default(now())
+  @@index([tenantId, status])
+}
+
+model Approval {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  actionId            String    @unique
+  action              Action    @relation(fields: [actionId], references: [id])
+  title               String
+  description         String?
+  agentId             String?
+  goalId              String?
+  taskId              String?
+  runId               String?
+  stepId              String?
+  requestedAction     Json // what exactly will happen, to what, and why now
+  reason              String?
+  requiredPermissions String[]  @default([])
+  riskInformation     Json      @default("{}")
+  // [v2 UI-UX S11] tool is the plan-step gate this table was built for; exec is an
+  // owner-only command approval whose outcomes are allow-once / allow-always / deny.
+  kind                String    @default("tool") // tool|exec
+  // [v2 UI-UX S4.4] The fine-grained answer for an exec approval: allow_once | allow_always
+  // | deny. `status` stays the state machine (approved/rejected/expired) so the CAS and the
+  // expiry guards are unchanged; this records which of the three buttons was actually pressed.
+  // Null for a tool approval, where the answer is exactly the status.
+  decision            String?
+  status              String    @default("pending") // pending|approved|rejected|expired
+  decidedBy           String?
+  decidedAt           DateTime?
+  expiresAt           DateTime?
+  createdAt           DateTime  @default(now())
+  @@index([tenantId, status])
+}
+
+// ══════════════════════════════════ chat ════════════════════════════════════
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  tenantId  String
+  userId    String
+  agentId   String?
+  title     String?
+  // [v2 UI-UX S4.1/S4.5] Which surface this conversation started on, so the Control UI
+  // can say started-on-Telegram and /handoff can rebind the destination.
+  surface     String  @default("web") // web|telegram|discord|...
+  channelType String?
+  peerRef     String?
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  @@index([tenantId, updatedAt])
+}
+
+model ChatMessage {
+  id            String       @id @default(cuid())
+  tenantId      String
+  sessionId     String?
+  session       ChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  runId         String?
+  run           Run?         @relation(fields: [runId], references: [id])
+  role          String // user | assistant | tool
+  content       String
+  toolCalls     Json? // [{ name, args, result?, ok }] transcript for the UI
+  attachmentIds String[]     @default([])
+  interrupted   Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  @@index([tenantId, createdAt])
+  @@index([sessionId])
+}
+
+// ═════════════════════════════ memory (RAG-lite) ════════════════════════════
+
+model Memory {
+  id        String                       @id @default(cuid())
+  tenantId  String
+  agentId   String?
+  goalId    String?
+  taskId    String?
+  scope     String // short_term|long_term|task|goal|agent|user|tenant|run
+  content   String
+  embedding Unsupported("vector(1536)")? // dimension must match the embedding model
+  metadata  Json                         @default("{}")
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+  @@index([tenantId, scope, agentId])
+}
+// [gap #8] Prisma cannot declare vector indexes → raw migration:
+//   CREATE EXTENSION IF NOT EXISTS vector;
+//   CREATE INDEX memory_embedding_idx ON "Memory" USING hnsw (embedding vector_cosine_ops);
+// Fallback when no embedding model is configured: ILIKE keyword search.
+
+// ═══════════════════════════ browser & sandbox ══════════════════════════════
+
+model BrowserSession {
+  id            String    @id @default(cuid())
+  tenantId      String
+  runId         String?
+  agentId       String?
+  status        String    @default("idle") // idle|active|closed|error
+  currentUrl    String?
+  title         String?
+  screenshotRef String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  @@index([tenantId, status])
+}
+
+model SandboxSession {
+  id        String             @id @default(cuid())
+  tenantId  String
+  runId     String?
+  provider  String             @default("worker-thread") // [gap #24] worker_threads, NOT child_process
+  status    String             @default("idle") // idle|running|terminated|error
+  workdir   String
+  env       Json               @default("{}")
+  executions SandboxExecution[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  @@index([tenantId, status])
+}
+
+model SandboxExecution {
+  id          String         @id @default(cuid())
+  sessionId   String
+  session     SandboxSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  command     String
+  args        String[]       @default([])
+  stdout      String?
+  stderr      String?
+  exitCode    Int?
+  status      String         @default("running") // running|completed|failed|timeout
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+}
+
+// ═════════════════════════════════ research ═════════════════════════════════
+
+model ResearchProject {
+  id        String        @id @default(cuid())
+  tenantId  String
+  title     String
+  question  String
+  agentId   String?
+  status    String        @default("active") // active|completed|archived
+  resultRef String?
+  runs      ResearchRun[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  @@index([tenantId, status])
+}
+
+model ResearchRun {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     ResearchProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runId       String?
+  status      String            @default("queued") // queued|running|completed|failed
+  plan        Json?
+  result      Json?
+  sources     ResearchSource[]
+  findings    ResearchFinding[]
+  createdAt   DateTime          @default(now())
+  completedAt DateTime?
+}
+
+model ResearchSource {
+  id          String      @id @default(cuid())
+  runId       String
+  run         ResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  url         String
+  title       String?
+  contentRef  String?
+  credibility String?
+  accessedAt  DateTime    @default(now())
+}
+
+model ResearchFinding {
+  id        String      @id @default(cuid())
+  runId     String
+  run       ResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  claim     String
+  evidence  Json        @default("[]")
+  verified  Boolean     @default(false)
+  sourceIds String[]    @default([])
+}
+
+// ══════════════════════════════════ skills ══════════════════════════════════
+
+model Skill {
+  id          String         @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  status      String         @default("active")
+  versions    SkillVersion[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  @@unique([tenantId, name])
+}
+
+model SkillVersion {
+  id             String   @id @default(cuid())
+  skillId        String
+  skill          Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  version        Int
+  promptTemplate String
+  argsSchema     Json     @default("{}")
+  createdAt      DateTime @default(now())
+  @@unique([skillId, version])
+}
+
+// ══════════════════════════ files, grants, notifications ════════════════════
+
+model Attachment {
+  id               String   @id @default(cuid())
+  tenantId         String
+  kind             String // file | folder
+  name             String
+  path             String
+  sizeBytes        Int?
+  mimeType         String?
+  scope            String // chat | agent | task
+  scopeId          String?
+  readAccess       Boolean  @default(true)
+  writeAccess      Boolean  @default(false)
+  grantedToAgentId String?
+  createdAt        DateTime @default(now())
+  @@index([tenantId, scope, scopeId])
+}
+
+model FolderGrant {
+  id           String   @id @default(cuid())
+  tenantId     String
+  rootPath     String
+  resolvedPath String // realpath, normalized — the symlink-escape guard
+  agentId      String?
+  taskId       String?
+  read         Boolean  @default(true)
+  write        Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  @@index([tenantId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String // approval_request|task_completed|task_failed|goal_completed|agent_failed|
+  // connector_failed|provider_failed|schedule_result
+  title     String
+  body      String?
+  linkRoute String? // deep-link routing for notification clicks
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  @@index([tenantId, userId, readAt])
+}
+
+// ═══════════════════════════ surfaces (UI/UX v2 §5, §20) ═══════════════════
+//
+// The multi-surface domain: the messaging channels the agent lives in, the DM pairing
+// requests that let a stranger in, the devices paired to the gateway, the routing table
+// that decides which agent answers a surface, and the plugins that can add all of it.
+//
+// `tenantId` follows the same rule as every other child model here: a plain indexed
+// scalar, never a Prisma relation, enforced structurally in the repository layer.
+//
+// **Why `Channel.status` is stored rather than derived.** A channel that is `healthy`
+// because the last poll succeeded and a channel that is `healthy` because nobody has ever
+// polled it look identical from the DB, and the UI must be able to tell an operator which
+// one they are looking at. `unverified` means exactly "no successful contact yet".
+
+model Channel {
+  id              String           @id @default(cuid())
+  tenantId        String
+  type            String // telegram | discord | slack | whatsapp | signal | matrix | ...
+  name            String
+  status          String           @default("unverified") // unverified|healthy|degraded|error|disconnected
+  statusDetail    String? // the last error, verbatim — a status with no reason is unactionable
+  dmPolicy        String           @default("pairing") // open|allowlist|pairing
+  groupPolicy     String           @default("allowlist") // open|allowlist|disabled
+  deliveryDefault String? // default reply routing: a ChannelAccount id, or null for "none"
+  voiceEnabled    Boolean          @default(false)
+  metadata        Json             @default("{}")
+  lastSeenAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  accounts        ChannelAccount[]
+  @@unique([tenantId, type, name])
+  @@index([tenantId, status])
+}
+
+// One identity on a channel — multi-account channels (two WhatsApp numbers, a personal and
+// a work Slack) are the normal case, not the exception, and an allowlist belongs to the
+// account rather than to the platform.
+model ChannelAccount {
+  id             String   @id @default(cuid())
+  tenantId       String
+  channelId      String
+  channel        Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  label          String
+  credentialId   String?
+  allowFrom      String[] @default([]) // sender ids, or "accessGroup:<name>"
+  groupAllowFrom String[] @default([])
+  status         String   @default("unverified")
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@unique([channelId, label])
+  @@index([tenantId])
+}
+
+// A named set of senders, rewritten in one place and referenced as `accessGroup:<name>`
+// from any allowlist — so one trusted set spans channels and both DM and group lists.
+//
+// `type` is stored rather than assumed because a group of message senders is not the only
+// set an allowlist will ever want to reference, and a column named `senders` would have to
+// be renamed to say so.
+model AccessGroup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  type      String   @default("message.senders")
+  members   Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([tenantId, name])
+}
+
+// A DM from someone the channel has never spoken to, asking to be let in.
+//
+// There is deliberately **no** unique constraint on the sender: a sender who was dismissed
+// may request again, and a sender who was approved once may be re-requested after the
+// allowlist changes. What must hold — one *pending* request per sender, and at most three
+// pending per account — is a rule about the current state, not about the table, so it is
+// enforced in `PairingService` where the two facts are read together.
+model PairingRequest {
+  id              String    @id @default(cuid())
+  tenantId        String
+  channelType     String
+  accountId       String?
+  senderId        String
+// 8 characters, no ambiguous glyphs. Stored verbatim: the requester types it back.
+  code            String
+  metadata        Json      @default("{}")
+  status          String    @default("pending") // pending|approved|dismissed|expired
+  expiresAt       DateTime
+  notifyOnApprove Boolean   @default(false)
+  madeOwner       Boolean   @default(false)
+  decidedBy       String?
+  decidedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  @@index([tenantId, status])
+  @@index([accountId, status])
+  @@index([tenantId, channelType, senderId, status])
+}
+
+// A client paired to the gateway: the web Control UI, a CLI, a TUI, a phone.
+//
+// `access` is `full` or `limited` and is *derived into* `scopes` at pairing time rather
+// than being read at request time, because a token that was issued with `operator.admin`
+// must keep meaning that even if the device row is later downgraded — the fix for a
+// downgrade is to revoke the tokens, which is a visible act.
+model Device {
+  id         String        @id @default(cuid())
+  tenantId   String
+  role       String // node|operator|browser|webchat
+  name       String
+  access     String        @default("limited") // full|limited
+  scopes     String[]      @default([])
+  publicKey  String?
+  status     String        @default("pending") // pending|paired|revoked
+  lastSeenAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  tokens     DeviceToken[]
+  @@index([tenantId, status])
+}
+
+// A single-use bootstrap token from a setup code, or a session token for a paired device.
+model DeviceToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  deviceId  String
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  scopes    String[]  @default([])
+  expiresAt DateTime
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  @@index([deviceId])
+}
+
+// The routing table: which agent answers a given surface.
+//
+// `matchKey` is the honest answer to "how do you deduplicate a rule whose parts are all
+// optional?" A Postgres unique index treats every `NULL` as distinct, so
+// `@@unique([tenantId, channelType, accountId, peerId])` would happily store two identical
+// "any channel, any peer" rules and make "most specific wins" ambiguous. `matchKey` is
+// those three parts joined with `|` and `*` for a wildcard, so specificity is a **property
+// of the key** — `telegram|acct_1|peer_9` (3 parts) beats `telegram|acct_1|*` (2) beats
+// `telegram|*|*` (1) beats `*|*|*` (0) — and the constraint is a real one.
+model Binding {
+  id          String   @id @default(cuid())
+  tenantId    String
+  channelType String?
+  accountId   String?
+  peerId      String?
+  matchKey    String
+  agentId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([tenantId, matchKey])
+  @@index([tenantId])
+}
+
+// A plugin: bundled or external, and the reason the channel list is open rather than
+// hard-coded. A `channel` plugin can add channel types; a `device-pair` plugin can serve
+// the pairing flow on a surface that has no web session.
+model Plugin {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  kind      String // channel|transport|capability|device-pair
+  version   String
+  source    String   @default("bundled") // bundled|external
+  enabled   Boolean  @default(false)
+  status    String   @default("installed") // installed|enabled|error
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([tenantId, name])
+}
+
+// A read-only cache of the public skills catalog.
+//
+// Global, not tenant-scoped, and therefore the one repository here whose methods do not
+// take `tenantId` first — a catalog is a fact about the world, not about a workspace.
+// Installing from it creates an ordinary tenant-owned `Skill` + `SkillVersion`; nothing
+// about a run ever reads this table, so a stale cache can never affect execution.
+model SkillHubEntry {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  latestVersion String
+  description   String?
+  readme        String?
+  sourceUrl     String?
+  cachedAt      DateTime @default(now())
+}
+
+// ═══════════════════ exec approvals (UI/UX v2 §4.4, §11, §20) ═══════════════
+//
+// The state machine for an exec approval is the *same* one tool approvals use
+// (pending → approved | rejected | expired), because a decision really is a decision. What
+// differs is the answer's granularity: allow-once, allow-always, or deny. That extra fact is
+// `Approval.decision`, and the durable consequence of `allow_always` is a row in this table.
+
+// A standing permission: run *this command*, in *this directory*, granted by the owner.
+//
+// ## Why a table and not a field on `Agent`
+//
+// `Agent.approvalPolicy` is tempting — it is already the approval configuration, and §6 even
+// shows an exec-approval toggle beside it. But `approvalPolicy` is a **behaviour-defining**
+// field: changing it mints a new `AgentVersion`. Granting "you may run `npm test` here" must
+// not appear in the agent's version history as a behaviour change. Operational decisions and
+// configuration are different things, and this table keeps them apart.
+//
+// ## Why not derive the rule from decided `Approval` rows
+//
+// Because an approval is a **record**, and every rule in this codebase says a record must stay
+// a record: `APPROVAL_TRANSITIONS` has no outgoing edges from a terminal state. Revoking a
+// standing permission has to mutate something, and mutating a record of a past decision would
+// make the audit lie. `revokedAt` here is a mutable field on a *policy* row, which is the
+// right place for it.
+//
+// ## What a rule authorises, precisely
+//
+// `command` + `cwd` must match exactly, and the requested args must **begin with** the stored
+// `args` (element-wise, so `['test','--watch']` is a match for `['test']` but `['publish']` is
+// not, and `'test-evil'` is not either — they are compared as tokens, never as a substring).
+//
+// That middle ground is deliberate. Matching `command` + `cwd` alone would let an operator who
+// approved `npm test` silently authorise `npm publish` in the same directory. Requiring
+// byte-identical args would make "allow always" mean "allow this once, again", which is not
+// what the button promises. Requiring the same *leading* arguments is the smallest rule that
+// is both useful and honest, and `execCommandMatches` in `@nexs/shared` is the only
+// implementation of it.
+model ExecAllowlistRule {
+  id         String    @id @default(cuid())
+  tenantId   String
+  agentId    String?
+  command    String
+  args       String[]  @default([])
+  cwd        String
+  createdBy  String
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  @@index([tenantId, command, cwd])
+  @@index([tenantId, agentId])
+}
